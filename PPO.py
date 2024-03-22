@@ -47,7 +47,7 @@ class Ppo:
             [], [], [], [], []
         for a_state, a_action, a_reward, a_mask, a_prob in data:
             state_lst.append(a_state)
-            action_lst.append(torch.Tensor(a_action))
+            action_lst.append(a_action)
             reward_lst.append(a_reward)
             mask_lst.append(a_mask)
             prob_lst.append(torch.Tensor(a_prob))
@@ -63,16 +63,18 @@ class Ppo:
             returns, advants = self.get_gae(rewards, masks, values.cpu())
 
         for idx, _ in enumerate(states):
-            self.buffer.push((states[idx],
-                              action_lst[idx],
-                              advants[idx],
-                              returns[idx],
-                              prob_lst[idx]))
+            if action_lst[idx] >= 0:
+                self.buffer.push((states[idx],
+                                  action_lst[idx],
+                                  advants[idx],
+                                  returns[idx],
+                                  prob_lst[idx]))
 
     def train(self):
         """
         Train Actor network and Value network with data in buffer.
         """
+        print(self.buffer.size())
 
         self.actor_net.train()
         self.critic_net.train()
@@ -81,7 +83,7 @@ class Ppo:
             states, actions, advants, returns, old_probs = self.buffer.pull(
                 BATCH_SIZE)
             states = torch.stack(states).to(self.device)
-            actions = torch.stack(actions).to(self.device)
+            actions = torch.LongTensor(actions).to(self.device).unsqueeze(1)
             advants = torch.stack(advants).unsqueeze(1).to(self.device)
             returns = torch.stack(returns).unsqueeze(1).to(self.device)
             old_probs = torch.stack(old_probs).to(self.device)
@@ -92,7 +94,7 @@ class Ppo:
             critic_loss.backward()
             self.critic_optim.step()
 
-            _, new_probs = self.actor_net(states)
+            new_probs = torch.softmax(self.actor_net(states), dim=1)
             old_probs = old_probs.gather(1, actions)
             new_probs = new_probs.gather(1, actions)
 
@@ -106,6 +108,8 @@ class Ppo:
             self.actor_optim.zero_grad()
             actor_loss.backward()
             self.actor_optim.step()
+
+            print('critic loss:', critic_loss.item(), ', actor loss:', actor_loss.item())
 
     def kl_divergence(self, old_mu, old_sigma, mu, sigma):
         """

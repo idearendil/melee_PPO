@@ -4,7 +4,7 @@ import melee
 
 class ObservationSpace:
     def __init__(self):
-        self.previous_observation = np.empty(0)
+        self.previous_observation = None
         self.previous_gamestate = None
         self.current_gamestate = None
         self.curr_action = None
@@ -22,28 +22,60 @@ class ObservationSpace:
     def get_actions(self, gamestate):
         actions = [gamestate.players[i].action.value for i in list(gamestate.players.keys())]
         action_frames = [gamestate.players[i].action_frame for i in list(gamestate.players.keys())]
+        return np.array([actions,
+                         action_frames], dtype=np.float32).T # players x 2
+    
+    def get_speeds(self, gamestate):
+        speed_air_x_self = [gamestate.players[i].speed_air_x_self for i in list(gamestate.players.keys())]
+        speed_ground_x_self = [gamestate.players[i].speed_ground_x_self for i in list(gamestate.players.keys())]
+        speed_x_attack = [gamestate.players[i].speed_x_attack for i in list(gamestate.players.keys())]
+        speed_y_attack = [gamestate.players[i].speed_y_attack for i in list(gamestate.players.keys())]
+        speed_y_self = [gamestate.players[i].speed_y_self for i in list(gamestate.players.keys())]
+        return np.array([speed_air_x_self,
+                         speed_ground_x_self,
+                         speed_x_attack,
+                         speed_y_attack,
+                         speed_y_self], dtype=np.float32).T
+    
+    def get_states(self, gamestate):
+        facing = [gamestate.players[i].facing for i in list(gamestate.players.keys())]
         hitstun_frames_left = [gamestate.players[i].hitstun_frames_left for i in list(gamestate.players.keys())]
-        
-        return np.array([actions, action_frames, hitstun_frames_left], dtype=np.float32).T # players x 3
+        invulnerability_frames_left = [gamestate.players[i].invulnerability_left for i in list(gamestate.players.keys())]
+        jumps_left = [gamestate.players[i].jumps_left for i in list(gamestate.players.keys())]
+        off_stage = [gamestate.players[i].off_stage for i in list(gamestate.players.keys())]
+        on_ground = [gamestate.players[i].on_ground for i in list(gamestate.players.keys())]
+        percent = [gamestate.players[i].percent for i in list(gamestate.players.keys())]
+        shield_strength = [gamestate.players[i].shield_strength for i in list(gamestate.players.keys())]
+        return np.array([facing,
+                         hitstun_frames_left,
+                         invulnerability_frames_left,
+                         jumps_left,
+                         off_stage,
+                         on_ground,
+                         percent,
+                         shield_strength], dtype=np.float32).T
 
     def get_positions(self, gamestate):
         x_positions = [gamestate.players[i].position.x for i in list(gamestate.players.keys())]
         y_positions = [gamestate.players[i].position.y for i in list(gamestate.players.keys())]
 
-        return np.array([x_positions, y_positions], dtype=np.float32).T  # players x 2
+        return np.array([x_positions,
+                         y_positions], dtype=np.float32).T  # players x 2
 
     def __call__(self, gamestate):
         reward = 0
         info = None
         self.current_gamestate = gamestate
         self.player_count = len(list(gamestate.players.keys()))
-        
+
         observation = np.concatenate((
-            self.get_positions(gamestate), 
-            self.get_actions(gamestate), 
+            self.get_positions(gamestate),
+            self.get_actions(gamestate),
+            self.get_states(gamestate),
+            self.get_speeds(gamestate),
             self.get_stocks(gamestate)), axis=1)
         # print(observation.flatten())
-        
+
         # if self.current_frame < 85 and not self.intial_process_complete:
         #     self.players_defeated_frames = np.array([0] * len(observation))
         #     self.intial_process_complete = True
@@ -58,23 +90,27 @@ class ObservationSpace:
 
         self.done = not np.sum(observation[np.argsort(observation[:, -1])][::-1][1:, -1])
 
-        if self.current_frame > 85 and not self.done:
-            # difficult to derive a reward function in a (possible) 4-player env
-            # but you might define some reward function here
-            # self.total_reward += reward
-            p1_dmg_dealt = (self.current_gamestate.players[1].percent - self.previous_gamestate.players[1].percent)
-            p1_shield_loss_ratio = (60 - self.current_gamestate.players[1].shield_strength)/60
-            p1_stock_loss = int(self.previous_gamestate.players[1].stock) - int(self.current_gamestate.players[1].stock)
-            p2_dmg_dealt = (self.current_gamestate.players[2].percent - self.previous_gamestate.players[2].percent)
-            p2_shield_loss_ratio = (60 - self.current_gamestate.players[2].shield_strength)/60
-            p2_stock_loss = int(self.previous_gamestate.players[2].stock) - int(self.current_gamestate.players[2].stock)
+        if not self.done:
+            # p1_dmg_dealt = (self.current_gamestate.players[1].percent - self.previous_gamestate.players[1].percent)
+            # p1_shield_loss_ratio = (60 - self.current_gamestate.players[1].shield_strength)/60
+            # p1_stock_loss = int(self.previous_gamestate.players[1].stock) - int(self.current_gamestate.players[1].stock)
+            # p2_dmg_dealt = (self.current_gamestate.players[2].percent - self.previous_gamestate.players[2].percent)
+            # p2_shield_loss_ratio = (60 - self.current_gamestate.players[2].shield_strength)/60
+            # p2_stock_loss = int(self.previous_gamestate.players[2].stock) - int(self.current_gamestate.players[2].stock)
 
-            w_dmg, w_shield, w_stock = 0.1, 0.1, 1
-            p1_score = w_dmg * p2_dmg_dealt + w_shield * p2_shield_loss_ratio**4 + w_stock * p2_stock_loss
-            p2_score = w_dmg * p1_dmg_dealt + w_shield * p1_shield_loss_ratio**4 + w_stock * p1_stock_loss
+            # w_dmg, w_shield, w_stock = 0.1, 0.1, 1
+            # p1_score = w_dmg * p2_dmg_dealt + w_shield * p2_shield_loss_ratio**4 + w_stock * p2_stock_loss
+            # p2_score = w_dmg * p1_dmg_dealt + w_shield * p1_shield_loss_ratio**4 + w_stock * p1_stock_loss
 
-            # p1 is agent so it's for p1
-            reward = p1_score - p2_score
+            # reward = p1_score - p2_score
+            if self.previous_observation is not None:
+                reward = (abs(self.previous_observation[0, 0] - 50) - abs(observation[0, 0] - 50)) / 10
+            else:
+                reward = 0
+            reward = (1 - abs(observation[0, 0] - 50) / 100)
+            print(reward)
+
+            
             
         # previous observation will always have the correct number of players
         self.previous_observation = observation

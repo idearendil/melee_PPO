@@ -7,13 +7,13 @@ import torch
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import psutil
+from melee import enums
 from parameters import MAX_STEP, CYCLE_NUM, MIN_STEPS_IN_CYCLE
 # from observation_normalizer import ObservationNormalizer
-from melee import enums
 from melee_env.agents.util import ObservationSpace
 from melee_env.env import MeleeEnv
-from melee_env.agents.basic import *
-import psutil
+from melee_env.agents.basic import PPOAgent, NOOP
 
 
 parser = argparse.ArgumentParser()
@@ -59,11 +59,12 @@ def run():
     np.random.seed(500)
 
     with open("log_" + args.env_name + ".csv",
-              "a",
+              "w",
               encoding="utf-8") as outfile:
         outfile.write("episode_id,score\n")
 
-    players = [PPOAgent(enums.Character.FOX, device), NOOP(enums.Character.FOX)]
+    players = [PPOAgent(enums.Character.FOX, device),
+               NOOP(enums.Character.FOX)]
 
     # normalizer = ObservationNormalizer(s_dim)
     if args.conitinue_training:
@@ -75,11 +76,10 @@ def run():
     episode_id = 0
 
     for cycle_id in range(CYCLE_NUM):
-        print(cycle_id)
         scores = []
         steps_in_cycle = 0
         episode_memory = []
-        players[0].ppo.buffer.buffer.clear()               # off-policy? on-policy?
+        players[0].ppo.buffer.buffer.clear()           # off-policy? on-policy?
         while steps_in_cycle < MIN_STEPS_IN_CYCLE:
             episode_id += 1
 
@@ -87,31 +87,34 @@ def run():
             env.start()
             gamestate, done = env.setup(enums.Stage.BATTLEFIELD)
 
-            now_observation, _, done, _ = obs_space(gamestate)
+            now_obs, _, _, _ = obs_space(gamestate)
             score = 0
             for step_cnt in range(MAX_STEP):
                 if step_cnt > 85:
                     steps_in_cycle += 1
 
-                    a, a_prob = players[0].act(now_observation)
+                    a, a_prob = players[0].act(now_obs)
                     players[1].act(gamestate)
 
                     gamestate, done = env.step()
-                    next_observation, r, done, _ = obs_space(gamestate)
+                    next_obs, r, _, _ = obs_space(gamestate)
                     # next_state = normalizer(next_state)
 
                     mask = (1 - done) * 1
-                
-                    episode_memory.append([now_observation, a, r, mask, a_prob])
+
+                    if next_obs[3] == now_obs[3] + 1 and now_obs[3] > 0:
+                        episode_memory.append([now_obs, -1, r, mask, a_prob])
+                    else:
+                        episode_memory.append([now_obs, a, r, mask, a_prob])
 
                     score += r
-                    now_observation = next_observation
+                    now_obs = next_obs
                 else:
-                    _, _ = players[0].act(now_observation)
+                    _, _ = players[0].act(now_obs)
                     players[1].act(gamestate)
                     gamestate, done = env.step()
-                    next_observation, r, done, _ = obs_space(gamestate)
-                    now_observation = next_observation
+                    next_obs, r, _, _ = obs_space(gamestate)
+                    now_obs = next_obs
 
                 if done:
                     break
@@ -123,6 +126,14 @@ def run():
                     for child in parent.children(recursive=True):
                         child.kill()
                     parent.kill()
+
+            cnt1 = 0
+            cnt2 = 0
+            for tp in episode_memory:
+                if tp[1] == -1:
+                    cnt2 += 1
+                cnt1 += 1
+            print("total actions:", cnt1, "/ meaningless actions:", cnt2)
             players[0].ppo.push_an_episode(episode_memory)
             episode_memory = []
 
@@ -137,8 +148,10 @@ def run():
               "\tscore: ", score_avg)
 
         players[0].ppo.train()
-        torch.save(players[0].ppo.actor_net, args.model_path + "actor_net.pt")
-        torch.save(players[0].ppo.critic_net, args.model_path + "critic_net.pt")
+        torch.save(
+            players[0].ppo.actor_net, args.model_path + "actor_net.pt")
+        torch.save(
+            players[0].ppo.critic_net, args.model_path + "critic_net.pt")
         # normalizer.save(args.model_path)
 
     log_df = pd.read_csv("log_" + args.env_name + ".csv")

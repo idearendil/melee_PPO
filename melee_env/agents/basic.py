@@ -173,7 +173,7 @@ class PPOAgent(Agent):
         super().__init__()
         self.character = character
 
-        self.s_dim = 12     # needs modification
+        self.s_dim = 36     # needs modification
         self.a_dim = ActionSpace().action_space.shape[0]
         self.device = device
 
@@ -190,7 +190,7 @@ class PPOAgent(Agent):
                 np.float32)).unsqueeze(0).to(self.device)
             a, a_prob = self.ppo.actor_net.choose_action(state_tensor)
 
-            self.action = a
+        self.action = a
 
         control = self.action_space(self.action)
         control(self.controller)
