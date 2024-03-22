@@ -3,6 +3,9 @@ from melee import enums
 import numpy as np
 from melee_env.agents.util import *
 import code
+from PPO import Ppo
+import torch
+
 
 class Agent(ABC):
     def __init__(self):
@@ -18,17 +21,18 @@ class Agent(ABC):
     def act(self):
         pass
 
+
 class AgentChooseCharacter(Agent):
     def __init__(self, character):
         super().__init__()
         self.character = character
-        
+
 
 class Human(Agent):
     def __init__(self):
         super().__init__()
         self.agent_type = "HMN"
-    
+
     def act(self, gamestate):
         pass
 
@@ -40,7 +44,7 @@ class CPU(AgentChooseCharacter):
         if not 1 <= lvl <= 9:
             raise ValueError(f"CPU Level must be 1-9. Got {lvl}")
         self.lvl = lvl
-    
+
     def act(self, gamestate):
         pass
 
@@ -57,27 +61,29 @@ class Random(AgentChooseCharacter):
     def __init__(self, character):
         super().__init__(character)
         self.action_space = ActionSpace()
-    
+
     @from_action_space
     def act(self, gamestate):
         action = self.action_space.sample()
         return action
 
+
 class Shine(Agent):
     def __init__(self):
         super().__init__()
         self.character = enums.Character.FOX
-    
+
     def act(self, gamestate):
         state = gamestate.players[self.port].action
         frames = gamestate.players[self.port].action_frame
         hitstun = gamestate.players[self.port].hitstun_frames_left
-        
+
         if state in [enums.Action.STANDING]:
             self.controller.tilt_analog_unit(enums.Button.BUTTON_MAIN, 0, -1)
 
-        if (state == enums.Action.CROUCHING or (
-            state == enums.Action.KNEE_BEND and frames == 3)):
+        if state == enums.Action.CROUCHING or (
+            state == enums.Action.KNEE_BEND and frames == 3
+        ):
             self.controller.release_button(enums.Button.BUTTON_Y)
             self.controller.press_button(enums.Button.BUTTON_B)
 
@@ -87,6 +93,7 @@ class Shine(Agent):
 
         if hitstun > 0:
             self.controller.release_all()
+
 
 class Rest(Agent):
     # adapted from AltF4's tutorial video: https://www.youtube.com/watch?v=1R723AS1P-0
@@ -98,16 +105,16 @@ class Rest(Agent):
         self.action_space = ActionSpace()
         self.observation_space = ObservationSpace()
         self.action = 0
-        
-    @from_action_space       # translate the action from action_space to controller input
+
+    @from_action_space  # translate the action from action_space to controller input
     @from_observation_space  # convert gamestate to an observation
     def act(self, observation):
         observation, reward, done, info = observation
 
-        # In order to make Rest-bot work for any number of players, it needs to 
-        #   select a target. A target is selected by identifying the closest 
-        #   player who is not currently defeated/respawning.  
-        curr_position = observation[self.port-1, :2]
+        # In order to make Rest-bot work for any number of players, it needs to
+        #   select a target. A target is selected by identifying the closest
+        #   player who is not currently defeated/respawning.
+        curr_position = observation[self.port - 1, :2]
         try:
             positions_centered = observation[:, :2] - curr_position
         except:
@@ -115,7 +122,7 @@ class Rest(Agent):
 
         # distance formula
         distances = np.sqrt(np.sum(positions_centered**2, axis=1))
-        closest_sort = np.argsort(np.sqrt(np.sum(positions_centered**2, axis=1)))  
+        closest_sort = np.argsort(np.sqrt(np.sum(positions_centered**2, axis=1)))
 
         actions = observation[:, 2]
         actions_by_closest = actions[closest_sort]
@@ -127,16 +134,18 @@ class Rest(Agent):
                 closest = closest_sort[i]
                 break
 
-        if closest == self.port-1:  # nothing to target
+        if closest == self.port - 1:  # nothing to target
             action = 0
 
         elif distances[closest] < 4:
             action = 23  # Rest
 
-        else:  
-            if np.abs(positions_centered[closest, 0]) < np.abs(positions_centered[closest, 1]):
+        else:
+            if np.abs(positions_centered[closest, 0]) < np.abs(
+                positions_centered[closest, 1]
+            ):
                 # closer in X than in Y - prefer jump
-            
+
                 if observation[closest, 1] > curr_position[1]:
                     if self.action == 1:
                         action = 0  # re-input jump
@@ -157,3 +166,32 @@ class Rest(Agent):
         self.action = action
 
         return self.action
+
+
+class PPOAgent(Agent):
+    def __init__(self, character, device):
+        super().__init__()
+        self.character = character
+
+        self.s_dim = 12     # needs modification
+        self.a_dim = ActionSpace().action_space.shape[0]
+        self.device = device
+
+        self.action_space = ActionSpace()
+
+        self.action = 0
+        self.ppo = Ppo(self.s_dim, self.a_dim, self.device)
+
+    def act(self, obs):
+
+        with torch.no_grad():
+            self.ppo.actor_net.eval()
+            state_tensor = torch.from_numpy(np.array(obs).astype(
+                np.float32)).unsqueeze(0).to(self.device)
+            a, a_prob = self.ppo.actor_net.choose_action(state_tensor)
+
+            self.action = a
+
+        control = self.action_space(self.action)
+        control(self.controller)
+        return a, a_prob

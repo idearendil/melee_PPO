@@ -44,17 +44,17 @@ class ObservationSpace:
             self.get_stocks(gamestate)), axis=1)
         # print(observation.flatten())
         
-        if self.current_frame < 85 and not self.intial_process_complete:
-            self.players_defeated_frames = np.array([0] * len(observation))
-            self.intial_process_complete = True
+        # if self.current_frame < 85 and not self.intial_process_complete:
+        #     self.players_defeated_frames = np.array([0] * len(observation))
+        #     self.intial_process_complete = True
 
-        defeated_idx = np.where(observation[:, -1] == 0)
-        self.players_defeated_frames[defeated_idx] += 1
+        # defeated_idx = np.where(observation[:, -1] == 0)
+        # self.players_defeated_frames[defeated_idx] += 1
 
-        if len(observation) < len(self.previous_observation):
-            rows_to_insert = np.where(self.players_defeated_frames >= 60)
-            for row in rows_to_insert:
-                observation = np.insert(observation, row, self.previous_observation[row], axis=0)            
+        # if len(observation) < len(self.previous_observation):
+        #     rows_to_insert = np.where(self.players_defeated_frames >= 60)
+        #     for row in rows_to_insert:
+        #         observation = np.insert(observation, row, self.previous_observation[row], axis=0)            
 
         self.done = not np.sum(observation[np.argsort(observation[:, -1])][::-1][1:, -1])
 
@@ -83,6 +83,8 @@ class ObservationSpace:
 
         if self.done:
             self._reset()
+
+        observation = observation.flatten()
 
         return observation, reward, self.done, info
 
