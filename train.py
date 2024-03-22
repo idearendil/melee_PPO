@@ -13,6 +13,8 @@ from melee import enums
 from melee_env.agents.util import ObservationSpace
 from melee_env.env import MeleeEnv
 from melee_env.agents.basic import *
+import psutil
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -62,8 +64,6 @@ def run():
         outfile.write("episode_id,score\n")
 
     players = [PPOAgent(enums.Character.FOX, device), NOOP(enums.Character.FOX)]
-    env = MeleeEnv(args.iso, players, fast_forward=True)
-    env.start()
 
     # normalizer = ObservationNormalizer(s_dim)
     if args.conitinue_training:
@@ -75,34 +75,54 @@ def run():
     episode_id = 0
 
     for cycle_id in range(CYCLE_NUM):
+        print(cycle_id)
         scores = []
         steps_in_cycle = 0
         episode_memory = []
         players[0].ppo.buffer.buffer.clear()               # off-policy? on-policy?
         while steps_in_cycle < MIN_STEPS_IN_CYCLE:
             episode_id += 1
+
+            env = MeleeEnv(args.iso, players, fast_forward=True)
+            env.start()
             gamestate, done = env.setup(enums.Stage.BATTLEFIELD)
+
             now_observation, _, done, _ = obs_space(gamestate)
             score = 0
-            for _ in range(MAX_STEP):
-                steps_in_cycle += 1
+            for step_cnt in range(MAX_STEP):
+                if step_cnt > 85:
+                    steps_in_cycle += 1
 
-                a, a_prob = players[0].act(now_observation)
-                players[1].act(gamestate)
+                    a, a_prob = players[0].act(now_observation)
+                    players[1].act(gamestate)
 
-                gamestate, done = env.step()
-                next_observation, r, done, _ = obs_space(gamestate)
-                # next_state = normalizer(next_state)
+                    gamestate, done = env.step()
+                    next_observation, r, done, _ = obs_space(gamestate)
+                    # next_state = normalizer(next_state)
 
-                mask = (1 - done) * 1
-                episode_memory.append([now_observation, a, r, mask, a_prob])
+                    mask = (1 - done) * 1
+                
+                    episode_memory.append([now_observation, a, r, mask, a_prob])
 
-                score += r
-                now_observation = next_observation
+                    score += r
+                    now_observation = next_observation
+                else:
+                    _, _ = players[0].act(now_observation)
+                    players[1].act(gamestate)
+                    gamestate, done = env.step()
+                    next_observation, r, done, _ = obs_space(gamestate)
+                    now_observation = next_observation
 
                 if done:
                     break
 
+            for proc in psutil.process_iter():
+                if proc.name() == "Slippi Dolphin.exe":
+                    parent_pid = proc.pid
+                    parent = psutil.Process(parent_pid)
+                    for child in parent.children(recursive=True):
+                        child.kill()
+                    parent.kill()
             players[0].ppo.push_an_episode(episode_memory)
             episode_memory = []
 
