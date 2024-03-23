@@ -1,5 +1,5 @@
 """
-Start training models by PPO method within Ant-v4 environment of mujoco.
+Start training models by PPO method within melee environment.
 """
 
 import argparse
@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import psutil
+from collections import deque
 from melee import enums
 from parameters import MAX_STEP, CYCLE_NUM, MIN_STEPS_IN_CYCLE
 # from observation_normalizer import ObservationNormalizer
@@ -24,7 +25,7 @@ parser.add_argument(
     help="name of environement"
 )
 parser.add_argument(
-    "--conitinue_training",
+    "--continue_training",
     type=bool,
     default=False,
     help="whether to continue training with existing models",
@@ -54,6 +55,7 @@ def run():
     print(device)
 
     obs_space = ObservationSpace()
+    action_buffer = deque(maxlen=3)
 
     torch.manual_seed(500)
     np.random.seed(500)
@@ -67,7 +69,7 @@ def run():
                NOOP(enums.Character.FOX)]
 
     # normalizer = ObservationNormalizer(s_dim)
-    if args.conitinue_training:
+    if args.continue_training:
         players[0].ppo.actor_net = torch.load(
             args.model_path + "actor_net.pt").to(device)
         players[0].ppo.critic_net = torch.load(
@@ -79,7 +81,7 @@ def run():
         scores = []
         steps_in_cycle = 0
         episode_memory = []
-        players[0].ppo.buffer.buffer.clear()           # off-policy? on-policy?
+        players[0].ppo.buffer.buffer.clear()  # off-policy? on-policy?
         while steps_in_cycle < MIN_STEPS_IN_CYCLE:
             episode_id += 1
 
@@ -87,25 +89,23 @@ def run():
             env.start()
             gamestate, done = env.setup(enums.Stage.BATTLEFIELD)
 
-            now_obs, _, _, _ = obs_space(gamestate)
+            now_obs, _, _, _ = obs_space(gamestate, done)
             score = 0
             for step_cnt in range(MAX_STEP):
                 if step_cnt > 85:
                     steps_in_cycle += 1
 
                     a, a_prob = players[0].act(now_obs)
+                    action_buffer.append(a)
                     players[1].act(gamestate)
 
                     gamestate, done = env.step()
-                    next_obs, r, _, _ = obs_space(gamestate)
+                    next_obs, r, _, _ = obs_space(gamestate, done)
                     # next_state = normalizer(next_state)
 
                     mask = (1 - done) * 1
 
-                    if next_obs[3] == now_obs[3] + 1 and now_obs[3] > 0:
-                        episode_memory.append([now_obs, -1, r, mask, a_prob])
-                    else:
-                        episode_memory.append([now_obs, a, r, mask, a_prob])
+                    episode_memory.append([now_obs, action_buffer[0], r, mask, a_prob])
 
                     score += r
                     now_obs = next_obs
@@ -113,7 +113,7 @@ def run():
                     _, _ = players[0].act(now_obs)
                     players[1].act(gamestate)
                     gamestate, done = env.step()
-                    next_obs, r, _, _ = obs_space(gamestate)
+                    next_obs, r, _, _ = obs_space(gamestate, done)
                     now_obs = next_obs
 
                 if done:
@@ -127,13 +127,6 @@ def run():
                         child.kill()
                     parent.kill()
 
-            cnt1 = 0
-            cnt2 = 0
-            for tp in episode_memory:
-                if tp[1] == -1:
-                    cnt2 += 1
-                cnt1 += 1
-            print("total actions:", cnt1, "/ meaningless actions:", cnt2)
             players[0].ppo.push_an_episode(episode_memory)
             episode_memory = []
 

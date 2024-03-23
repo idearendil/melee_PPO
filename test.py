@@ -1,36 +1,36 @@
 """
-Testing saved models within Ant-v4 environment of mujoco.
+Testing saved models within within melee environment.
 """
 
 import argparse
 import torch
 import numpy as np
-from gym.envs.mujoco.ant_v4 import AntEnv
+import psutil
+from melee import enums
 from parameters import MAX_STEP
-from PPO import Ppo
-from observation_normalizer import ObservationNormalizer
+
+# from observation_normalizer import ObservationNormalizer
+from melee_env.agents.util import ObservationSpace
+from melee_env.env import MeleeEnv
+from melee_env.agents.basic import PPOAgent, NOOP
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--env_name",
-    type=str,
-    default="Ant-v4",
-    help="name of Mujoco environement"
+    "--env_name", type=str, default="melee", help="name of environement"
 )
 parser.add_argument(
-    "--model_path",
-    type=str,
-    default="./models/",
-    help="where models are saved"
+    "--model_path", type=str, default="./models/", help="where models are saved"
 )
 parser.add_argument(
-    "--episode_num",
-    type=int,
-    default=100,
-    help="How many times to test"
+    "--episode_num", type=int, default=100, help="How many times to test"
 )
-
+parser.add_argument(
+    "--iso",
+    type=str,
+    default="../ssbm.iso",
+    help="Path to your NTSC 1.02/PAL SSBM Melee ISO",
+)
 args = parser.parse_args()
 
 
@@ -39,13 +39,12 @@ def run():
     Start testing with given options.
     """
 
-    device = torch.device('cuda:0') if torch.cuda.is_available() \
-        else torch.device('cpu')
+    device = (
+        torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+    )
     print(device)
 
-    env = AntEnv()
-    s_dim = env.observation_space.shape[0]
-    a_dim = env.action_space.shape[0]
+    obs_space = ObservationSpace()
 
     torch.manual_seed(500)
     np.random.seed(500)
@@ -53,29 +52,40 @@ def run():
     with open("log_" + args.env_name + ".csv", "a", encoding="utf-8") as outfile:
         outfile.write("episode_id,score\n")
 
-    ppo = Ppo(s_dim, a_dim, device)
-    normalizer = ObservationNormalizer(s_dim)
-    ppo.actor_net = torch.load(args.model_path + "actor_net.pt")
-    ppo.critic_net = torch.load(args.model_path + "critic_net.pt")
-    normalizer.load(args.model_path)
+    players = [PPOAgent(enums.Character.FOX, device), NOOP(enums.Character.FOX)]
+
+    # normalizer = ObservationNormalizer(s_dim)
+    players[0].ppo.actor_net = torch.load(args.model_path + "actor_net.pt")
+    players[0].ppo.critic_net = torch.load(args.model_path + "critic_net.pt")
+    # normalizer.load(args.model_path)
     episode_id = 0
 
     for episode_id in range(args.episode_num):
-        now_state = normalizer(env.reset(seed=500))
+        env = MeleeEnv(args.iso, players, fast_forward=True)
+        env.start()
+        gamestate, done = env.setup(enums.Stage.BATTLEFIELD)
+
+        now_obs, _, _, _ = obs_space(gamestate, done)
         score = 0
         for _ in range(MAX_STEP):
-            env.render()
 
-            with torch.no_grad():
-                ppo.actor_net.eval()
-                a, _ = ppo.actor_net.choose_action(torch.from_numpy(np.array(
-                    now_state).astype(np.float32)).unsqueeze(0).to(device))
-            now_state, r, done, _, _ = env.step(a)
-            now_state = normalizer(now_state)
+            _, _ = players[0].act(now_obs)
+            players[1].act(gamestate)
+            gamestate, done = env.step()
+            next_obs, r, _, _ = obs_space(gamestate, done)
+            now_obs = next_obs
+
             score += r
 
             if done:
                 break
+        for proc in psutil.process_iter():
+            if proc.name() == "Slippi Dolphin.exe":
+                parent_pid = proc.pid
+                parent = psutil.Process(parent_pid)
+                for child in parent.children(recursive=True):
+                    child.kill()
+                parent.kill()
         print("episode: ", episode_id, "\tscore: ", score)
 
 

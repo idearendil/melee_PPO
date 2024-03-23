@@ -63,22 +63,22 @@ class Ppo:
             returns, advants = self.get_gae(rewards, masks, values.cpu())
 
         for idx, _ in enumerate(states):
-            if action_lst[idx] >= 0:
-                self.buffer.push((states[idx],
-                                  action_lst[idx],
-                                  advants[idx],
-                                  returns[idx],
-                                  prob_lst[idx]))
+            self.buffer.push((states[idx],
+                              action_lst[idx],
+                              advants[idx],
+                              returns[idx],
+                              prob_lst[idx]))
 
     def train(self):
         """
         Train Actor network and Value network with data in buffer.
         """
-        print(self.buffer.size())
+        print('buffer size: ', self.buffer.size())
 
         self.actor_net.train()
         self.critic_net.train()
-        for _ in range(BATCH_NUM):
+        critic_loss_lst, actor_loss_lst = [], []
+        for batch_id in range(BATCH_NUM):
 
             states, actions, advants, returns, old_probs = self.buffer.pull(
                 BATCH_SIZE)
@@ -98,7 +98,7 @@ class Ppo:
             old_probs = old_probs.gather(1, actions)
             new_probs = new_probs.gather(1, actions)
 
-            ratio = torch.exp(new_probs - old_probs)
+            ratio = torch.exp(torch.log(new_probs) - torch.log(old_probs))
             surrogate_loss = ratio * advants
 
             ratio = torch.clamp(ratio, 1.0 - EPSILON, 1.0 + EPSILON)
@@ -109,7 +109,13 @@ class Ppo:
             actor_loss.backward()
             self.actor_optim.step()
 
-            print('critic loss:', critic_loss.item(), ', actor loss:', actor_loss.item())
+            actor_loss_lst.append(actor_loss.item())            
+            critic_loss_lst.append(critic_loss.item())
+            if batch_id % 10 == 0:
+                print('critic loss:', sum(critic_loss_lst) / len(critic_loss_lst),
+                      '\t\tactor loss:', sum(actor_loss_lst) / len(actor_loss_lst))
+                actor_loss_lst.clear()
+                critic_loss_lst.clear()
 
     def kl_divergence(self, old_mu, old_sigma, mu, sigma):
         """
