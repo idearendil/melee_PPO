@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import psutil
 from collections import deque
 from melee import enums
-from parameters import MAX_STEP, CYCLE_NUM, MIN_STEPS_IN_CYCLE
+from parameters import MAX_STEP, CYCLE_NUM, MIN_STEPS_IN_CYCLE, DELAY
 # from observation_normalizer import ObservationNormalizer
 from melee_env.agents.util import ObservationSpace
 from melee_env.env import MeleeEnv
@@ -55,7 +55,7 @@ def run():
     print(device)
 
     obs_space = ObservationSpace()
-    action_buffer = deque(maxlen=3)
+    action_buffer = deque(maxlen=DELAY+1)
 
     torch.manual_seed(500)
     np.random.seed(500)

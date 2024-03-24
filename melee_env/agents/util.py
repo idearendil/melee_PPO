@@ -19,13 +19,18 @@ class ObservationSpace:
         return np.array([stocks], dtype=np.float32).T  # players x 1
 
     def get_actions(self, gamestate):
-        actions = [
-            gamestate.players[i].action.value for i in list(gamestate.players.keys())
-        ]
+        actions = np.zeros((len(gamestate.players.keys()), 386), dtype=np.float32)
+        if gamestate.players[1].action.value < 386:
+            actions[0, gamestate.players[1].action.value] = 1.0
+        if gamestate.players[2].action.value < 386:
+            actions[1, gamestate.players[2].action.value] = 1.0
+        return actions
+
+    def get_action_frames(self, gamestate):
         action_frames = [
             gamestate.players[i].action_frame for i in list(gamestate.players.keys())
         ]
-        return np.array([actions, action_frames], dtype=np.float32).T  # players x 2
+        return np.array([action_frames], dtype=np.float32).T
 
     def get_speeds(self, gamestate):
         speed_air_x_self = [
@@ -109,6 +114,7 @@ class ObservationSpace:
             (
                 self.get_positions(gamestate),
                 self.get_relative_distance(gamestate),
+                self.get_action_frames(gamestate),
                 self.get_actions(gamestate),
                 self.get_states(gamestate),
             ),

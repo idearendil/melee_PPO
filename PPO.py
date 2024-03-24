@@ -5,9 +5,10 @@ The file of Ppo class.
 import torch.optim as optim
 import numpy as np
 import torch
+from torch.distributions import Categorical
 from model import Actor, Critic
 from parameters import LR_ACTOR, LR_CRITIC, GAMMA, LAMBDA, BATCH_SIZE, \
-    EPSILON, L2_RATE, BUFFER_SIZE, BATCH_NUM
+    EPSILON, L2_RATE, BUFFER_SIZE, BATCH_NUM, ENTROPY_WEIGHT
 from replay_buffer import ReplayBuffer
 
 
@@ -95,6 +96,7 @@ class Ppo:
             self.critic_optim.step()
 
             new_probs = torch.softmax(self.actor_net(states), dim=1)
+            entropy_loss = Categorical(new_probs).entropy().mean()
             old_probs = old_probs.gather(1, actions)
             new_probs = new_probs.gather(1, actions)
 
@@ -105,6 +107,7 @@ class Ppo:
             clipped_loss = ratio * advants
 
             actor_loss = -torch.min(surrogate_loss, clipped_loss).mean()
+            actor_loss -= ENTROPY_WEIGHT * entropy_loss
             self.actor_optim.zero_grad()
             actor_loss.backward()
             self.actor_optim.step()
