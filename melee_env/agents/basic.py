@@ -16,6 +16,7 @@ class Agent(ABC):
         self.press_start = False
         self.self_observation = None
         self.current_frame = 0
+        self.action_space = ActionSpace()
 
     @abstractmethod
     def act(self):
@@ -53,8 +54,8 @@ class NOOP(AgentChooseCharacter):
     def __init__(self, character):
         super().__init__(character)
 
-    def act(self, gamestate):
-        self.action = 0
+    def act(self):
+        return 0
 
 
 class Random(AgentChooseCharacter):
@@ -173,7 +174,7 @@ class PPOAgent(Agent):
         super().__init__()
         self.character = character
 
-        self.s_dim = 806     # needs modification
+        self.s_dim = 941     # needs modification
         self.a_dim = ActionSpace().action_space.shape[0]
         self.device = device
 
@@ -191,7 +192,4 @@ class PPOAgent(Agent):
             a, a_prob = self.ppo.actor_net.choose_action(state_tensor)
 
         self.action = a
-
-        control = self.action_space(self.action)
-        control(self.controller)
         return a, a_prob

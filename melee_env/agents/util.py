@@ -1,15 +1,16 @@
 import numpy as np
 import melee
+from collections import deque
 
 
 class ObservationSpace:
     def __init__(self):
-        self.previous_observation = None
         self.previous_gamestate = None
         self.current_gamestate = None
         self.curr_action = None
         self.player_count = None
-        self.current_frame = 0
+        self.previous_actions = deque(maxlen=3)
+        self.previous_actions.extend((0, 0, 0))
 
     def set_player_keys(self, keys):
         self.player_keys = keys
@@ -111,7 +112,14 @@ class ObservationSpace:
         ]
         return np.array(distances, dtype=np.float32).reshape((2, 1))
 
-    def __call__(self, gamestate, done=False):
+    def get_previous_actions(self, action):
+        actions = np.zeros((45 * 3,), dtype=np.float32)
+        for i in range(3):
+            actions[i * 45 + actions[i]] = 1.0
+        self.previous_actions.append(action)
+        return actions
+
+    def __call__(self, gamestate, action):
         reward = 0
         info = None
         self.current_gamestate = gamestate
@@ -128,16 +136,6 @@ class ObservationSpace:
             ),
             axis=1,
         )
-
-        # defeated_idx = np.where(observation[:, -1] == 0)
-        # self.players_defeated_frames[defeated_idx] += 1
-
-        # if len(observation) < len(self.previous_observation):
-        #     rows_to_insert = np.where(self.players_defeated_frames >= 60)
-        #     for row in rows_to_insert:
-        #         observation = np.insert(observation, row, self.previous_observation[row], axis=0)
-
-        self.done = done
 
         if self.previous_gamestate is not None:
             p1_dmg = (
@@ -192,18 +190,19 @@ class ObservationSpace:
         # else:
         #     reward = 0
 
-        self.previous_observation = observation
         self.previous_gamestate = self.current_gamestate
-        self.current_frame += 1
-
-        if self.done:
-            self._reset()
 
         observation = observation.flatten()
+        observation = np.concatenate(
+            (observation, self.get_previous_actions(action)), axis=0)
 
-        return observation, reward, self.done, info
+        stocks = np.array([gamestate.players[i].stock for i in list(
+            gamestate.players.keys())])
+        done = not np.sum(stocks[np.argsort(stocks)][::-1][1:])
 
-    def _reset(self):
+        return observation, reward, done, info
+
+    def reset(self):
         self.__init__()
         print("observation space got reset!")
 

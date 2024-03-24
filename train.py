@@ -12,8 +12,7 @@ from collections import deque
 from melee import enums
 from parameters import MAX_STEP, CYCLE_NUM, MIN_STEPS_IN_CYCLE, DELAY
 # from observation_normalizer import ObservationNormalizer
-from melee_env.agents.util import ObservationSpace
-from melee_env.env import MeleeEnv
+from melee_env.myenv import MeleeEnv
 from melee_env.agents.basic import PPOAgent, NOOP
 
 
@@ -54,7 +53,6 @@ def run():
         else torch.device('cpu')
     print(device)
 
-    obs_space = ObservationSpace()
     action_buffer = deque(maxlen=DELAY+1)
 
     torch.manual_seed(500)
@@ -84,48 +82,39 @@ def run():
         players[0].ppo.buffer.buffer.clear()  # off-policy? on-policy?
         while steps_in_cycle < MIN_STEPS_IN_CYCLE:
             episode_id += 1
+            score = 0
+            now_obs = None
 
             env = MeleeEnv(args.iso, players, fast_forward=True)
             env.start()
-            gamestate, done = env.setup(enums.Stage.BATTLEFIELD)
-
-            now_obs, _, _, _ = obs_space(gamestate, done)
-            score = 0
+            now_obs, _ = env.reset(enums.Stage.BATTLEFIELD)
             for step_cnt in range(MAX_STEP):
-                if step_cnt > 85:
+                if step_cnt > 100:
                     steps_in_cycle += 1
 
-                    a, a_prob = players[0].act(now_obs)
-                    action_buffer.append(a)
-                    players[1].act(gamestate)
+                    action_pair = [0, 0]
+                    action_pair[0], a_prob = players[0].act(now_obs)
+                    action_buffer.append(action_pair[0])
+                    action_pair[1] = players[1].act()
 
-                    gamestate, done = env.step()
-                    next_obs, r, _, _ = obs_space(gamestate, done)
+                    next_obs, r, done, _ = env.step(*action_pair)
                     # next_state = normalizer(next_state)
 
                     mask = (1 - done) * 1
 
-                    episode_memory.append([now_obs, action_buffer[0], r, mask, a_prob])
+                    if now_obs[3+0] == 0 and now_obs[3+35] == 0 and now_obs[3+322] == 0 and now_obs[3+323] == 0 and now_obs[3+324] == 0:
+                        episode_memory.append([now_obs, action_buffer[0], r, mask, a_prob])
 
                     score += r
                     now_obs = next_obs
+
+                    if done:
+                        break
                 else:
-                    _, _ = players[0].act(now_obs)
-                    players[1].act(gamestate)
-                    gamestate, done = env.step()
-                    next_obs, r, _, _ = obs_space(gamestate, done)
-                    now_obs = next_obs
+                    action_pair = [0, 0]
+                    now_obs, _, _, _ = env.step(*action_pair)
 
-                if done:
-                    break
-
-            for proc in psutil.process_iter():
-                if proc.name() == "Slippi Dolphin.exe":
-                    parent_pid = proc.pid
-                    parent = psutil.Process(parent_pid)
-                    for child in parent.children(recursive=True):
-                        child.kill()
-                    parent.kill()
+            env.close()
 
             players[0].ppo.push_an_episode(episode_memory)
             episode_memory = []

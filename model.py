@@ -12,11 +12,11 @@ class Actor(nn.Module):
     """
     def __init__(self, s_dim, a_dim):
         super(Actor, self).__init__()
-        self.fc1 = nn.Linear(s_dim, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, a_dim)
-        self.bn1 = nn.BatchNorm1d(256)
-        self.bn2 = nn.BatchNorm1d(256)
+        self.fc1 = nn.Linear(s_dim, 512)
+        self.fc2 = nn.Linear(512, 512)
+        self.fc3 = nn.Linear(512, a_dim)
+        self.bn1 = nn.BatchNorm1d(512)
+        self.bn2 = nn.BatchNorm1d(512)
         self.a_dim = a_dim
         self.set_init([self.fc1, self.fc2, self.fc2])
 
@@ -63,11 +63,11 @@ class Critic(nn.Module):
     """
     def __init__(self, s_dim):
         super(Critic, self).__init__()
-        self.fc1 = nn.Linear(s_dim, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 1)
-        self.bn1 = nn.BatchNorm1d(128)
-        self.bn2 = nn.BatchNorm1d(128)
+        self.fc1 = nn.Linear(s_dim, 512)
+        self.fc2 = nn.Linear(512, 512)
+        self.fc3 = nn.Linear(512, 1)
+        self.bn1 = nn.BatchNorm1d(512)
+        self.bn2 = nn.BatchNorm1d(512)
         # self.set_init([self.fc1, self.fc2, self.fc2])
 
     def set_init(self, layers):
