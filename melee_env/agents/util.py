@@ -84,7 +84,14 @@ class ObservationSpace:
         shield_strength = [
             gamestate.players[i].shield_strength for i in list(gamestate.players.keys())
         ]
-        return np.array([facing], dtype=np.float32).T
+        return np.array([facing,
+                         hitstun_frames_left,
+                         invulnerability_frames_left,
+                         jumps_left,
+                         off_stage,
+                         on_ground,
+                         percent,
+                         shield_strength], dtype=np.float32).T
 
     def get_positions(self, gamestate):
         x_positions = [
@@ -114,9 +121,10 @@ class ObservationSpace:
             (
                 self.get_positions(gamestate),
                 self.get_relative_distance(gamestate),
-                self.get_action_frames(gamestate),
                 self.get_actions(gamestate),
+                self.get_action_frames(gamestate),
                 self.get_states(gamestate),
+                self.get_speeds(gamestate)
             ),
             axis=1,
         )
@@ -131,58 +139,58 @@ class ObservationSpace:
 
         self.done = done
 
-        # if self.previous_gamestate is not None:
-        #     p1_dmg = (
-        #         self.current_gamestate.players[1].percent
-        #         - self.previous_gamestate.players[1].percent
-        #     )
-        #     p1_shield_dmg = (
-        #         self.previous_gamestate.players[1].shield_strength
-        #         - self.current_gamestate.players[1].shield_strength
-        #     )
-        #     p1_stock_loss = int(self.previous_gamestate.players[1].stock) - int(
-        #         self.current_gamestate.players[1].stock
-        #     )
-        #     p2_dmg = (
-        #         self.current_gamestate.players[2].percent
-        #         - self.previous_gamestate.players[2].percent
-        #     )
-        #     p2_shield_dmg = (
-        #         self.previous_gamestate.players[2].shield_strength
-        #         - self.current_gamestate.players[2].shield_strength
-        #     )
-        #     p2_stock_loss = int(self.previous_gamestate.players[2].stock) - int(
-        #         self.current_gamestate.players[2].stock
-        #     )
-
-        #     p1_dmg = max(p1_dmg, 0)
-        #     p2_dmg = max(p2_dmg, 0)
-        #     if p1_stock_loss > 1:
-        #         p1_stock_loss = 0
-        #     if p2_stock_loss > 1:
-        #         p2_stock_loss = 0
-        #     p1_stock_loss = max(p1_stock_loss, 0)
-        #     p2_stock_loss = max(p2_stock_loss, 0)
-
-        #     w_dmg, w_shield, w_stock = 0.1, 0.02, 10
-        #     p1_loss = (
-        #         w_dmg * p1_dmg + w_shield * p1_shield_dmg + w_stock * p1_stock_loss
-        #     )
-        #     p2_loss = (
-        #         w_dmg * p2_dmg + w_shield * p2_shield_dmg + w_stock * p2_stock_loss
-        #     )
-
-        #     reward = p2_loss - p1_loss
-        # else:
-        #     reward = 0
-
         if self.previous_gamestate is not None:
+            p1_dmg = (
+                self.current_gamestate.players[1].percent
+                - self.previous_gamestate.players[1].percent
+            )
+            p1_shield_dmg = (
+                self.previous_gamestate.players[1].shield_strength
+                - self.current_gamestate.players[1].shield_strength
+            )
             p1_stock_loss = int(self.previous_gamestate.players[1].stock) - int(
                 self.current_gamestate.players[1].stock
             )
-            reward = p1_stock_loss
+            p2_dmg = (
+                self.current_gamestate.players[2].percent
+                - self.previous_gamestate.players[2].percent
+            )
+            p2_shield_dmg = (
+                self.previous_gamestate.players[2].shield_strength
+                - self.current_gamestate.players[2].shield_strength
+            )
+            p2_stock_loss = int(self.previous_gamestate.players[2].stock) - int(
+                self.current_gamestate.players[2].stock
+            )
+
+            p1_dmg = max(p1_dmg, 0)
+            p2_dmg = max(p2_dmg, 0)
+            if p1_stock_loss > 1:
+                p1_stock_loss = 0
+            if p2_stock_loss > 1:
+                p2_stock_loss = 0
+            p1_stock_loss = max(p1_stock_loss, 0)
+            p2_stock_loss = max(p2_stock_loss, 0)
+
+            w_dmg, w_shield, w_stock = 0.1, 0.02, 10
+            p1_loss = (
+                w_dmg * p1_dmg + w_shield * p1_shield_dmg + w_stock * p1_stock_loss
+            )
+            p2_loss = (
+                w_dmg * p2_dmg + w_shield * p2_shield_dmg + w_stock * p2_stock_loss
+            )
+
+            reward = p2_loss - p1_loss
         else:
             reward = 0
+
+        # if self.previous_gamestate is not None:
+        #     p1_stock_loss = int(self.previous_gamestate.players[1].stock) - int(
+        #         self.current_gamestate.players[1].stock
+        #     )
+        #     reward = p1_stock_loss
+        # else:
+        #     reward = 0
 
         self.previous_observation = observation
         self.previous_gamestate = self.current_gamestate

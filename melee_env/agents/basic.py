@@ -173,7 +173,7 @@ class PPOAgent(Agent):
         super().__init__()
         self.character = character
 
-        self.s_dim = 782     # needs modification
+        self.s_dim = 806     # needs modification
         self.a_dim = ActionSpace().action_space.shape[0]
         self.device = device
 
