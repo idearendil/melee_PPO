@@ -7,10 +7,8 @@ import torch
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import psutil
-from collections import deque
 from melee import enums
-from parameters import MAX_STEP, CYCLE_NUM, MIN_STEPS_IN_CYCLE, DELAY
+from parameters import MAX_STEP, CYCLE_NUM, MIN_STEPS_IN_CYCLE
 # from observation_normalizer import ObservationNormalizer
 from melee_env.myenv import MeleeEnv
 from melee_env.agents.basic import PPOAgent, NOOP
@@ -53,15 +51,8 @@ def run():
         else torch.device('cpu')
     print(device)
 
-    action_buffer = deque(maxlen=DELAY+1)
-
     torch.manual_seed(500)
     np.random.seed(500)
-
-    with open("log_" + args.env_name + ".csv",
-              "w",
-              encoding="utf-8") as outfile:
-        outfile.write("episode_id,score\n")
 
     players = [PPOAgent(enums.Character.FOX, device),
                NOOP(enums.Character.FOX)]
@@ -73,6 +64,11 @@ def run():
         players[0].ppo.critic_net = torch.load(
             args.model_path + "critic_net.pt").to(device)
         # normalizer.load(args.model_path)
+    else:
+        with open("log_" + args.env_name + ".csv",
+                  "w",
+                  encoding="utf-8") as outfile:
+            outfile.write("episode_id,score\n")
     episode_id = 0
 
     for cycle_id in range(CYCLE_NUM):
@@ -83,7 +79,6 @@ def run():
         while steps_in_cycle < MIN_STEPS_IN_CYCLE:
             episode_id += 1
             score = 0
-            now_obs = None
 
             env = MeleeEnv(args.iso, players, fast_forward=True)
             env.start()
@@ -93,8 +88,8 @@ def run():
                     steps_in_cycle += 1
 
                     action_pair = [0, 0]
-                    action_pair[0], a_prob = players[0].act(now_obs)
-                    action_buffer.append(action_pair[0])
+                    a, a_prob = players[0].act(now_obs)
+                    action_pair[0] = a
                     action_pair[1] = players[1].act()
 
                     next_obs, r, done, _ = env.step(*action_pair)
@@ -102,8 +97,7 @@ def run():
 
                     mask = (1 - done) * 1
 
-                    if now_obs[3+0] == 0 and now_obs[3+35] == 0 and now_obs[3+322] == 0 and now_obs[3+323] == 0 and now_obs[3+324] == 0:
-                        episode_memory.append([now_obs, action_buffer[0], r, mask, a_prob])
+                    episode_memory.append([now_obs, a, r, mask, a_prob])
 
                     score += r
                     now_obs = next_obs
@@ -117,6 +111,8 @@ def run():
             env.close()
 
             players[0].ppo.push_an_episode(episode_memory)
+            print('episode:', episode_id,
+                  'buffer length:', players[0].ppo.buffer.size())
             episode_memory = []
 
             with open(

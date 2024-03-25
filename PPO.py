@@ -8,7 +8,7 @@ import torch
 from torch.distributions import Categorical
 from model import Actor, Critic
 from parameters import LR_ACTOR, LR_CRITIC, GAMMA, LAMBDA, BATCH_SIZE, \
-    EPSILON, L2_RATE, BUFFER_SIZE, BATCH_NUM, ENTROPY_WEIGHT
+    EPSILON, L2_RATE, BUFFER_SIZE, BATCH_NUM, ENTROPY_WEIGHT, DELAY
 from replay_buffer import ReplayBuffer
 
 
@@ -64,9 +64,11 @@ class Ppo:
             returns, advants = self.get_gae(rewards, masks, values.cpu())
 
         for idx, _ in enumerate(states):
+            if idx+DELAY >= len(states):
+                break
             self.buffer.push((states[idx],
                               action_lst[idx],
-                              advants[idx],
+                              advants[idx+DELAY],
                               returns[idx],
                               prob_lst[idx]))
 

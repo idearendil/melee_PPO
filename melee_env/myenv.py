@@ -5,6 +5,7 @@ import numpy as np
 import sys
 from melee_env.agents.util import ObservationSpace
 import psutil
+import time
 
 
 class MeleeEnv:
@@ -154,7 +155,7 @@ class MeleeEnv:
     def close(self):
         for proc in psutil.process_iter():
             # print(proc.name)
-            if proc.name() == "dolphin-emu":
+            if proc.name() == "Slippi Dolphin.exe":
                 parent_pid = proc.pid
                 parent = psutil.Process(parent_pid)
                 for child in parent.children(recursive=True):

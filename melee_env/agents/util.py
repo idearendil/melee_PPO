@@ -114,10 +114,29 @@ class ObservationSpace:
 
     def get_previous_actions(self, action):
         actions = np.zeros((45 * 3,), dtype=np.float32)
-        for i in range(3):
-            actions[i * 45 + actions[i]] = 1.0
         self.previous_actions.append(action)
+        for i in range(3):
+            actions[i * 45 + self.previous_actions[i]] = 1.0
         return actions
+
+    def get_image(self, gamestate):
+        # size = (200, 200)
+        # center point = (0, 0) => (100, 40) <= this might be modified
+        def coordinator(x, y):
+            return min(max(x + 100, 0), 199), min(max(y + 40, 0), 199)
+
+        image_tensor = np.zeros((3, 200, 200), dtype=np.float32)
+        p1_x = gamestate.players[1].position.x
+        p1_y = gamestate.players[1].position.y
+        p2_x = gamestate.players[2].position.x
+        p2_y = gamestate.players[2].position.y
+        p1_x, p1_y = coordinator(p1_x, p1_y)
+        p2_x, p2_y = coordinator(p2_x, p2_y)
+        image_tensor[p1_x, p1_y] = 1.0
+        image_tensor[p2_x, p2_y] = 1.0
+        # add platform information in 3rd layer here
+
+        return image_tensor
 
     def __call__(self, gamestate, action):
         reward = 0
@@ -193,8 +212,7 @@ class ObservationSpace:
         self.previous_gamestate = self.current_gamestate
 
         observation = observation.flatten()
-        observation = np.concatenate(
-            (observation, self.get_previous_actions(action)), axis=0)
+        observation = np.concatenate((observation, self.get_previous_actions(action)), axis=0)
 
         stocks = np.array([gamestate.players[i].stock for i in list(
             gamestate.players.keys())])
@@ -204,7 +222,7 @@ class ObservationSpace:
 
     def reset(self):
         self.__init__()
-        print("observation space got reset!")
+        # print("observation space got reset!")
 
 
 class ActionSpace:
