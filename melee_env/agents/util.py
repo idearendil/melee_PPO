@@ -17,7 +17,7 @@ class ObservationSpace:
 
     def get_stocks(self, gamestate):
         stocks = [gamestate.players[i].stock for i in list(gamestate.players.keys())]
-        return np.array([stocks], dtype=np.float32).T  # players x 1
+        return np.array([stocks], dtype=np.float32)
 
     def get_actions(self, gamestate):
         actions = np.zeros((len(gamestate.players.keys()), 386), dtype=np.float32)
@@ -25,13 +25,13 @@ class ObservationSpace:
             actions[0, gamestate.players[1].action.value] = 1.0
         if gamestate.players[2].action.value < 386:
             actions[1, gamestate.players[2].action.value] = 1.0
-        return actions
+        return actions.reshape((-1,))
 
     def get_action_frames(self, gamestate):
         action_frames = [
             gamestate.players[i].action_frame for i in list(gamestate.players.keys())
         ]
-        return np.array([action_frames], dtype=np.float32).T
+        return np.array(action_frames, dtype=np.float32)
 
     def get_speeds(self, gamestate):
         speed_air_x_self = [
@@ -51,16 +51,11 @@ class ObservationSpace:
         speed_y_self = [
             gamestate.players[i].speed_y_self for i in list(gamestate.players.keys())
         ]
-        return np.array(
-            [
-                speed_air_x_self,
-                speed_ground_x_self,
-                speed_x_attack,
-                speed_y_attack,
-                speed_y_self,
-            ],
-            dtype=np.float32,
-        ).T
+        return np.array(sum([speed_air_x_self,
+                             speed_ground_x_self,
+                             speed_x_attack,
+                             speed_y_attack,
+                             speed_y_self], []), dtype=np.float32)
 
     def get_states(self, gamestate):
         facing = [gamestate.players[i].facing for i in list(gamestate.players.keys())]
@@ -85,14 +80,14 @@ class ObservationSpace:
         shield_strength = [
             gamestate.players[i].shield_strength for i in list(gamestate.players.keys())
         ]
-        return np.array([facing,
-                         hitstun_frames_left,
-                         invulnerability_frames_left,
-                         jumps_left,
-                         off_stage,
-                         on_ground,
-                         percent,
-                         shield_strength], dtype=np.float32).T
+        return np.array(sum([facing,
+                             hitstun_frames_left,
+                             invulnerability_frames_left,
+                             jumps_left,
+                             off_stage,
+                             on_ground,
+                             percent,
+                             shield_strength], []), dtype=np.float32)
 
     def get_positions(self, gamestate):
         x_positions = [
@@ -101,7 +96,8 @@ class ObservationSpace:
         y_positions = [
             gamestate.players[i].position.y for i in list(gamestate.players.keys())
         ]
-        return np.array([x_positions, y_positions], dtype=np.float32).T  # players x 2
+        return np.array(sum([x_positions,
+                             y_positions], []), dtype=np.float32)
 
     def get_relative_distance(self, gamestate):
         if len(gamestate.players.keys()) > 2:
@@ -110,7 +106,7 @@ class ObservationSpace:
             gamestate.players[1].position.x - gamestate.players[2].position.x,
             gamestate.players[1].position.y - gamestate.players[2].position.y,
         ]
-        return np.array(distances, dtype=np.float32).reshape((2, 1))
+        return np.array(distances, dtype=np.float32)
 
     def get_previous_actions(self, action):
         actions = np.zeros((45 * 3,), dtype=np.float32)
@@ -119,53 +115,19 @@ class ObservationSpace:
             actions[i * 45 + self.previous_actions[i]] = 1.0
         return actions
 
-    def get_image(self, gamestate):
-        # size = (200, 200)
-        # center point = (0, 0) => (100, 40) <= this might be modified
-        def coordinator(x, y):
-            return int(min(max(x + 100, 0), 199)), int(min(max(y + 40, 0), 199))
-
-        image_tensor = np.zeros((3, 200, 200), dtype=np.float32)
-        p1_x = gamestate.players[1].position.x
-        p1_y = gamestate.players[1].position.y
-        p2_x = gamestate.players[2].position.x
-        p2_y = gamestate.players[2].position.y
-        p1_face = 1.0 if gamestate.players[1].facing else -1.0
-        p2_face = 1.0 if gamestate.players[2].facing else -1.0
-        p1_x, p1_y = coordinator(p1_x, p1_y)
-        p2_x, p2_y = coordinator(p2_x, p2_y)
-        image_tensor[1, p1_x, p1_y] = p1_face
-        image_tensor[2, p2_x, p2_y] = p2_face
-
-        for i in range(-70, 71):
-            image_tensor[0, i, 0] = 1.0
-        for i in range(-60, -20):
-            image_tensor[0, i, 27] = 1.0
-        for i in range(21, 61):
-            image_tensor[0, i, 27] = 1.0
-        for i in range(-20, 21):
-            image_tensor[0, i, 54] = 1.0
-        # add platform information in 3rd layer here
-
-        return image_tensor
-
     def __call__(self, gamestate, action):
         reward = 0
         info = None
         self.current_gamestate = gamestate
         self.player_count = len(list(gamestate.players.keys()))
 
-        observation = np.concatenate(
-            (
-                self.get_positions(gamestate),
-                self.get_relative_distance(gamestate),
-                self.get_actions(gamestate),
-                self.get_action_frames(gamestate),
-                self.get_states(gamestate),
-                self.get_speeds(gamestate)
-            ),
-            axis=1,
-        )
+        observation = np.concatenate((self.get_positions(gamestate),
+                                      self.get_relative_distance(gamestate),
+                                      self.get_states(gamestate),
+                                      self.get_actions(gamestate),
+                                      self.get_action_frames(gamestate),
+                                      self.get_speeds(gamestate),
+                                      self.get_previous_actions(action)), axis=0)
 
         # if self.previous_gamestate is not None:
         #     p1_dmg = (
@@ -221,10 +183,6 @@ class ObservationSpace:
             reward = 0
 
         self.previous_gamestate = self.current_gamestate
-
-        observation = observation.flatten()
-        observation = np.concatenate((observation, self.get_previous_actions(action)), axis=0)
-        observation = (self.get_image(gamestate), observation)
 
         stocks = np.array([gamestate.players[i].stock for i in list(
             gamestate.players.keys())])

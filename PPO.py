@@ -34,6 +34,12 @@ class Ppo:
         self.actor_net.to(device)
         self.critic_net.to(device)
 
+    def choose_action(self, s):
+        s_ts1, s_ts2 = self.state_preprocessor(s)
+        s_ts1 = torch.from_numpy(s_ts1).unsqueeze(0).to(self.device)
+        s_ts2 = torch.from_numpy(s_ts2).unsqueeze(0).to(self.device)
+        return self.actor_net.choose_action((s_ts1, s_ts2))
+
     def push_an_episode(self, data):
         """
         Push an episode to replay buffer.
@@ -44,15 +50,19 @@ class Ppo:
             None
         """
 
-        s_lst1, s_lst2, a_lst, r_lst, mask_lst, prob_lst = \
-            [], [], [], [], [], []
+        s_lst1, a_lst, r_lst, mask_lst, prob_lst = \
+            [], [], [], [], []
         for s, a, r, mask, prob in data:
-            s_lst1.append(s[0])
-            s_lst2.append(s[1])
+            s_lst1.append(s)
             a_lst.append(a)
             r_lst.append(r)
             mask_lst.append(mask)
             prob_lst.append(torch.Tensor(prob))
+
+        s_lst2 = []
+        for s in s_lst1:
+            _, s2 = self.state_preprocessor(s)
+            s_lst2.append(s2)
 
         s_ts1 = torch.Tensor(
             np.array(s_lst1, dtype=np.float32)).to(self.device)
@@ -63,16 +73,21 @@ class Ppo:
 
         with torch.no_grad():
             self.critic_net.eval()
-            v_ts = self.critic_net((s_ts1, s_ts2))
-            ret_ts, adv_ts = self.get_gae(r_ts, masks, v_ts.cpu())
+            v_lst = []
+            for idx in range(0, len(s_ts1), BATCH_SIZE):
+                idx_end = min(idx+BATCH_SIZE, len(s_ts1))
+                v_lst.append(self.critic_net((s_ts1[idx:idx_end],
+                                              s_ts2[idx:idx_end])).cpu())
+            v_ts = torch.concatenate(v_lst, dim=0)
+            ret_ts, adv_ts = self.get_gae(r_ts, masks, v_ts)
 
         for idx, _ in enumerate(s_ts1):
             if idx+DELAY >= len(s_ts1):
                 break
-            self.buffer.push(((s_ts1[idx], s_ts2[idx]),
+            self.buffer.push((s_lst1[idx],
                               a_lst[idx],
-                              adv_ts[idx+DELAY],
-                              ret_ts[idx],
+                              adv_ts[idx+DELAY].item(),
+                              ret_ts[idx].item(),
                               prob_lst[idx]))
 
     def train(self):
@@ -86,14 +101,22 @@ class Ppo:
         critic_loss_lst, actor_loss_lst = [], []
         for batch_id in range(BATCH_NUM):
 
-            s_lst, a_lst, adv_lst, ret_lst, op_lst = self.buffer.pull(
+            s_lst1, a_lst, adv_lst, ret_lst, op_lst = self.buffer.pull(
                 BATCH_SIZE)
-            st_ts1 = torch.stack(s_lst[0]).to(self.device)
-            st_ts2 = torch.stack(s_lst[1]).to(self.device)
+
+            s_lst2 = []
+            for s in s_lst1:
+                _, s2 = self.state_preprocessor(s)
+                s_lst2.append(s2)
+
+            st_ts1 = torch.Tensor(np.stack(s_lst1, axis=0)).to(self.device)
+            st_ts2 = torch.Tensor(np.stack(s_lst2, axis=0)).to(self.device)
             a_ts = torch.LongTensor(a_lst).to(self.device).unsqueeze(1)
-            adv_ts = torch.stack(adv_lst).unsqueeze(1).to(self.device)
-            ret_ts = torch.stack(ret_lst).unsqueeze(1).to(self.device)
-            op_ts = torch.stack(op_lst).to(self.device)
+            adv_ts = torch.Tensor(np.array(
+                adv_lst, dtype=np.float32)).unsqueeze(1).to(self.device)
+            ret_ts = torch.Tensor(np.array(
+                ret_lst, dtype=np.float32)).unsqueeze(1).to(self.device)
+            op_ts = torch.Tensor(np.stack(op_lst, axis=0)).to(self.device)
 
             v_ts = self.critic_net((st_ts1, st_ts2))
             critic_loss = self.critic_loss_func(v_ts, ret_ts)
@@ -167,3 +190,32 @@ class Ppo:
             advants[t] = running_advants
         advants = (advants - advants.mean()) / advants.std()
         return returns, advants
+
+    def state_preprocessor(self, s):
+        # size = (200, 200)
+        # center point = (0, 0) => (100, 40) <= this might be modified
+        def coordinator(x, y):
+            return int(min(max(x + 100, 0), 199)), int(min(max(y + 40, 0), 199))
+
+        image_tensor = np.zeros((3, 200, 200), dtype=np.float32)
+        p1_x = s[0]
+        p1_y = s[2]
+        p2_x = s[1]
+        p2_y = s[3]
+        p1_face = 1.0 if s[6] else -1.0
+        p2_face = 1.0 if s[7] else -1.0
+        p1_x, p1_y = coordinator(p1_x, p1_y)
+        p2_x, p2_y = coordinator(p2_x, p2_y)
+        image_tensor[1, p1_x, p1_y] = p1_face
+        image_tensor[2, p2_x, p2_y] = p2_face
+
+        for i in range(-70, 71):
+            image_tensor[0, i, 0] = 1.0
+        for i in range(-60, -20):
+            image_tensor[0, i, 27] = 1.0
+        for i in range(21, 61):
+            image_tensor[0, i, 27] = 1.0
+        for i in range(-20, 21):
+            image_tensor[0, i, 54] = 1.0
+
+        return (s, image_tensor)

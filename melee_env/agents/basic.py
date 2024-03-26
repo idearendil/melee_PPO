@@ -184,15 +184,4 @@ class PPOAgent(Agent):
         self.ppo = Ppo(self.s_dim, self.a_dim, self.device)
 
     def act(self, s):
-
-        with torch.no_grad():
-            self.ppo.actor_net.eval()
-            s_ts1 = torch.from_numpy(np.array(s[0]).astype(
-                np.float32)).unsqueeze(0).to(self.device)
-            s_ts2 = torch.from_numpy(np.array(s[1]).astype(
-                np.float32)).unsqueeze(0).to(self.device)
-            a, a_prob = self.ppo.actor_net.choose_action(
-                (s_ts1, s_ts2))
-
-        self.action = a
-        return a, a_prob
+        return self.ppo.choose_action(s)

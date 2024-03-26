@@ -106,7 +106,7 @@ def run():
                         break
                 else:
                     action_pair = [0, 0]
-                    now_obs, _, _, _ = env.step(*action_pair)
+                    now_s, _, _, _ = env.step(*action_pair)
 
             env.close()
 

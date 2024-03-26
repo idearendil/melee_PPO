@@ -51,16 +51,16 @@ class Actor(nn.Module):
         """
         s1, s2 = s
 
-        s1 = self.bn2d_1(self.conv1(s1))
-        s1 = F.max_pool2d((F.relu(s1)), kernel_size=2)
-        s1 = self.bn2d_2(self.conv2(s1))
-        s1 = F.max_pool2d((F.relu(s1)), kernel_size=2)
-        s1 = self.bn2d_3(self.conv3(s1))
-        s1 = F.max_pool2d((F.relu(s1)), kernel_size=2)
-        s1 = s1.view(-1, 5 * 5 * 10)
+        s2 = self.bn2d_1(self.conv1(s2))
+        s2 = F.max_pool2d((F.relu(s2)), kernel_size=2)
+        s2 = self.bn2d_2(self.conv2(s2))
+        s2 = F.max_pool2d((F.relu(s2)), kernel_size=2)
+        s2 = self.bn2d_3(self.conv3(s2))
+        s2 = F.max_pool2d((F.relu(s2)), kernel_size=2)
+        s2 = s2.view(-1, 5 * 5 * 10)
 
-        s2 = self.bn1d_1(torch.tanh(self.fc1(s2)))
-        s2 = self.bn1d_2(torch.tanh(self.fc2(s2)))
+        s1 = self.bn1d_1(torch.tanh(self.fc1(s1)))
+        s1 = self.bn1d_2(torch.tanh(self.fc2(s1)))
 
         s = torch.concatenate((s1, s2), dim=1)
 
@@ -76,13 +76,16 @@ class Actor(nn.Module):
             action tensor sampled from policy(normal distribution),
             log probability of the action
         """
-        action_prob = torch.softmax(self.forward(s), dim=1).squeeze()
-        # a = torch.argmax(action_prob).item()
-        a = choice(list(range(self.a_dim)),
-                   1,
-                   replace=False,
-                   p=action_prob.cpu().numpy())[0]
-        return a, action_prob
+        with torch.no_grad():
+            self.eval()
+            action_prob_ts = torch.softmax(self.forward(s), dim=1)
+            action_prob_np = action_prob_ts.squeeze().cpu().numpy()
+            # a = torch.argmax(action_prob).item()
+            a = choice(list(range(self.a_dim)),
+                       1,
+                       replace=False,
+                       p=action_prob_np)[0]
+        return a, action_prob_np
 
 
 class Critic(nn.Module):
@@ -128,16 +131,16 @@ class Critic(nn.Module):
         """
         s1, s2 = s
 
-        s1 = self.bn2d_1(self.conv1(s1))
-        s1 = F.max_pool2d((F.relu(s1)), kernel_size=2)
-        s1 = self.bn2d_2(self.conv2(s1))
-        s1 = F.max_pool2d((F.relu(s1)), kernel_size=2)
-        s1 = self.bn2d_3(self.conv3(s1))
-        s1 = F.max_pool2d((F.relu(s1)), kernel_size=2)
-        s1 = s1.view(-1, 5 * 5 * 10)
+        s2 = self.bn2d_1(self.conv1(s2))
+        s2 = F.max_pool2d((F.relu(s2)), kernel_size=2)
+        s2 = self.bn2d_2(self.conv2(s2))
+        s2 = F.max_pool2d((F.relu(s2)), kernel_size=2)
+        s2 = self.bn2d_3(self.conv3(s2))
+        s2 = F.max_pool2d((F.relu(s2)), kernel_size=2)
+        s2 = s2.view(-1, 5 * 5 * 10)
 
-        s2 = self.bn1d_1(torch.tanh(self.fc1(s2)))
-        s2 = self.bn1d_2(torch.tanh(self.fc2(s2)))
+        s1 = self.bn1d_1(torch.tanh(self.fc1(s1)))
+        s1 = self.bn1d_2(torch.tanh(self.fc2(s1)))
 
         s = torch.concatenate((s1, s2), dim=1)
 
