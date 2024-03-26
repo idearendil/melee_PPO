@@ -21,8 +21,8 @@ action_space = ActionSpace()
 observation_space = ObservationSpace()
 
 # action_buffer = deque(maxlen=3)
-action_sequence = [3, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-# action_sequence = [7] * 30
+# action_sequence = [7, 7, 7, 7, 7, 7, 7, 7]
+action_sequence = [7] * 30
 # action_sequence[59] = 12
 action_idx = 0
 

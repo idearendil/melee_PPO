@@ -44,29 +44,32 @@ class Ppo:
             None
         """
 
-        state_lst, action_lst, reward_lst, mask_lst, prob_lst = \
-            [], [], [], [], []
+        state_lst1, state_lst2, action_lst, reward_lst, mask_lst, prob_lst = \
+            [], [], [], [], [], []
         for a_state, a_action, a_reward, a_mask, a_prob in data:
-            state_lst.append(a_state)
+            state_lst1.append(a_state[0])
+            state_lst2.append(a_state[1])
             action_lst.append(a_action)
             reward_lst.append(a_reward)
             mask_lst.append(a_mask)
             prob_lst.append(torch.Tensor(a_prob))
 
-        states = torch.Tensor(
-            np.array(state_lst, dtype=np.float32)).to(self.device)
+        states1 = torch.Tensor(
+            np.array(state_lst1, dtype=np.float32)).to(self.device)
+        states2 = torch.Tensor(
+            np.array(state_lst2, dtype=np.float32)).to(self.device)
         rewards = torch.Tensor(np.array(reward_lst, dtype=np.float32))
         masks = torch.Tensor(np.array(mask_lst, dtype=np.float32))
 
         with torch.no_grad():
             self.critic_net.eval()
-            values = self.critic_net(states)
+            values = self.critic_net((states1, states2))
             returns, advants = self.get_gae(rewards, masks, values.cpu())
 
-        for idx, _ in enumerate(states):
-            if idx+DELAY >= len(states):
+        for idx, _ in enumerate(states1):
+            if idx+DELAY >= len(states1):
                 break
-            self.buffer.push((states[idx],
+            self.buffer.push(((states1[idx], states2[idx]),
                               action_lst[idx],
                               advants[idx+DELAY],
                               returns[idx],
@@ -85,19 +88,20 @@ class Ppo:
 
             states, actions, advants, returns, old_probs = self.buffer.pull(
                 BATCH_SIZE)
-            states = torch.stack(states).to(self.device)
+            states1 = torch.stack(states[0]).to(self.device)
+            states2 = torch.stack(states[1]).to(self.device)
             actions = torch.LongTensor(actions).to(self.device).unsqueeze(1)
             advants = torch.stack(advants).unsqueeze(1).to(self.device)
             returns = torch.stack(returns).unsqueeze(1).to(self.device)
             old_probs = torch.stack(old_probs).to(self.device)
 
-            values = self.critic_net(states)
+            values = self.critic_net((states1, states2))
             critic_loss = self.critic_loss_func(values, returns)
             self.critic_optim.zero_grad()
             critic_loss.backward()
             self.critic_optim.step()
 
-            new_probs = torch.softmax(self.actor_net(states), dim=1)
+            new_probs = torch.softmax(self.actor_net((states1, states2)), dim=1)
             entropy_loss = Categorical(new_probs).entropy().mean()
             old_probs = old_probs.gather(1, actions)
             new_probs = new_probs.gather(1, actions)

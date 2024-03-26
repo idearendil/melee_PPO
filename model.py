@@ -3,6 +3,7 @@ The file of actor and critic architectures.
 """
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from numpy.random import choice
 
 
@@ -12,13 +13,21 @@ class Actor(nn.Module):
     """
     def __init__(self, s_dim, a_dim):
         super(Actor, self).__init__()
+
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=10, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=10, out_channels=10, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(in_channels=10, out_channels=10, kernel_size=5, stride=5, padding=0)
+        self.bn2d_1 = nn.BatchNorm2d(num_features=10)
+        self.bn2d_2 = nn.BatchNorm2d(num_features=10)
+        self.bn2d_3 = nn.BatchNorm2d(num_features=10)
+
         self.fc1 = nn.Linear(s_dim, 512)
         self.fc2 = nn.Linear(512, 256)
-        self.fc3 = nn.Linear(256, a_dim)
-        self.bn1 = nn.BatchNorm1d(512)
-        self.bn2 = nn.BatchNorm1d(256)
+        self.fc3 = nn.Linear(256 + 250, a_dim)
+        self.bn1d_1 = nn.BatchNorm1d(512)
+        self.bn1d_2 = nn.BatchNorm1d(256)
         self.a_dim = a_dim
-        self.set_init([self.fc1, self.fc2, self.fc2])
+        # self.set_init([self.fc1, self.fc2, self.fc2])
 
     def set_init(self, layers):
         """
@@ -37,9 +46,22 @@ class Actor(nn.Module):
         Returns:
             mu and sigma of policy considering current observation
         """
-        x = self.bn1(torch.tanh(self.fc1(s)))
-        x = self.bn2(torch.tanh(self.fc2(x)))
-        return self.fc3(x)
+        s1, s2 = s
+
+        s1 = self.bn2d_1(self.conv1(s1))
+        s1 = F.max_pool2d((F.relu(s1)), kernel_size=2)
+        s1 = self.bn2d_2(self.conv2(s1))
+        s1 = F.max_pool2d((F.relu(s1)), kernel_size=2)
+        s1 = self.bn2d_3(self.conv3(s1))
+        s1 = F.max_pool2d((F.relu(s1)), kernel_size=2)
+        s1 = s1.view(-1, 5 * 5 * 10)
+
+        s2 = self.bn1d_1(torch.tanh(self.fc1(s2)))
+        s2 = self.bn1d_2(torch.tanh(self.fc2(s2)))
+
+        s = torch.concatenate((s1, s2), dim=1)
+
+        return self.fc3(s)
 
     def choose_action(self, s):
         """
@@ -63,11 +85,19 @@ class Critic(nn.Module):
     """
     def __init__(self, s_dim):
         super(Critic, self).__init__()
+
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=10, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=10, out_channels=10, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(in_channels=10, out_channels=10, kernel_size=5, stride=5, padding=0)
+        self.bn2d_1 = nn.BatchNorm2d(num_features=10)
+        self.bn2d_2 = nn.BatchNorm2d(num_features=10)
+        self.bn2d_3 = nn.BatchNorm2d(num_features=10)
+
         self.fc1 = nn.Linear(s_dim, 512)
-        self.fc2 = nn.Linear(512, 128)
-        self.fc3 = nn.Linear(128, 1)
-        self.bn1 = nn.BatchNorm1d(512)
-        self.bn2 = nn.BatchNorm1d(128)
+        self.fc2 = nn.Linear(512, 256)
+        self.fc3 = nn.Linear(256 + 250, 1)
+        self.bn1d_1 = nn.BatchNorm1d(512)
+        self.bn1d_2 = nn.BatchNorm1d(256)
         # self.set_init([self.fc1, self.fc2, self.fc2])
 
     def set_init(self, layers):
@@ -87,7 +117,19 @@ class Critic(nn.Module):
         Returns:
             estimated value of current state
         """
-        x = self.bn1(torch.tanh(self.fc1(s)))
-        x = self.bn2(torch.tanh(self.fc2(x)))
-        values = self.fc3(x)
-        return values
+        s1, s2 = s
+
+        s1 = self.bn2d_1(self.conv1(s1))
+        s1 = F.max_pool2d((F.relu(s1)), kernel_size=2)
+        s1 = self.bn2d_2(self.conv2(s1))
+        s1 = F.max_pool2d((F.relu(s1)), kernel_size=2)
+        s1 = self.bn2d_3(self.conv3(s1))
+        s1 = F.max_pool2d((F.relu(s1)), kernel_size=2)
+        s1 = s1.view(-1, 5 * 5 * 10)
+
+        s2 = self.bn1d_1(torch.tanh(self.fc1(s2)))
+        s2 = self.bn1d_2(torch.tanh(self.fc2(s2)))
+
+        s = torch.concatenate((s1, s2), dim=1)
+
+        return self.fc3(s)
