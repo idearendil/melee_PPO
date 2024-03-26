@@ -44,35 +44,35 @@ class Ppo:
             None
         """
 
-        state_lst1, state_lst2, action_lst, reward_lst, mask_lst, prob_lst = \
+        s_lst1, s_lst2, a_lst, r_lst, mask_lst, prob_lst = \
             [], [], [], [], [], []
-        for a_state, a_action, a_reward, a_mask, a_prob in data:
-            state_lst1.append(a_state[0])
-            state_lst2.append(a_state[1])
-            action_lst.append(a_action)
-            reward_lst.append(a_reward)
-            mask_lst.append(a_mask)
-            prob_lst.append(torch.Tensor(a_prob))
+        for s, a, r, mask, prob in data:
+            s_lst1.append(s[0])
+            s_lst2.append(s[1])
+            a_lst.append(a)
+            r_lst.append(r)
+            mask_lst.append(mask)
+            prob_lst.append(torch.Tensor(prob))
 
-        states1 = torch.Tensor(
-            np.array(state_lst1, dtype=np.float32)).to(self.device)
-        states2 = torch.Tensor(
-            np.array(state_lst2, dtype=np.float32)).to(self.device)
-        rewards = torch.Tensor(np.array(reward_lst, dtype=np.float32))
+        s_ts1 = torch.Tensor(
+            np.array(s_lst1, dtype=np.float32)).to(self.device)
+        s_ts2 = torch.Tensor(
+            np.array(s_lst2, dtype=np.float32)).to(self.device)
+        r_ts = torch.Tensor(np.array(r_lst, dtype=np.float32))
         masks = torch.Tensor(np.array(mask_lst, dtype=np.float32))
 
         with torch.no_grad():
             self.critic_net.eval()
-            values = self.critic_net((states1, states2))
-            returns, advants = self.get_gae(rewards, masks, values.cpu())
+            v_ts = self.critic_net((s_ts1, s_ts2))
+            ret_ts, adv_ts = self.get_gae(r_ts, masks, v_ts.cpu())
 
-        for idx, _ in enumerate(states1):
-            if idx+DELAY >= len(states1):
+        for idx, _ in enumerate(s_ts1):
+            if idx+DELAY >= len(s_ts1):
                 break
-            self.buffer.push(((states1[idx], states2[idx]),
-                              action_lst[idx],
-                              advants[idx+DELAY],
-                              returns[idx],
+            self.buffer.push(((s_ts1[idx], s_ts2[idx]),
+                              a_lst[idx],
+                              adv_ts[idx+DELAY],
+                              ret_ts[idx],
                               prob_lst[idx]))
 
     def train(self):
@@ -86,31 +86,32 @@ class Ppo:
         critic_loss_lst, actor_loss_lst = [], []
         for batch_id in range(BATCH_NUM):
 
-            states, actions, advants, returns, old_probs = self.buffer.pull(
+            s_lst, a_lst, adv_lst, ret_lst, op_lst = self.buffer.pull(
                 BATCH_SIZE)
-            states1 = torch.stack(states[0]).to(self.device)
-            states2 = torch.stack(states[1]).to(self.device)
-            actions = torch.LongTensor(actions).to(self.device).unsqueeze(1)
-            advants = torch.stack(advants).unsqueeze(1).to(self.device)
-            returns = torch.stack(returns).unsqueeze(1).to(self.device)
-            old_probs = torch.stack(old_probs).to(self.device)
+            st_ts1 = torch.stack(s_lst[0]).to(self.device)
+            st_ts2 = torch.stack(s_lst[1]).to(self.device)
+            a_ts = torch.LongTensor(a_lst).to(self.device).unsqueeze(1)
+            adv_ts = torch.stack(adv_lst).unsqueeze(1).to(self.device)
+            ret_ts = torch.stack(ret_lst).unsqueeze(1).to(self.device)
+            op_ts = torch.stack(op_lst).to(self.device)
 
-            values = self.critic_net((states1, states2))
-            critic_loss = self.critic_loss_func(values, returns)
+            v_ts = self.critic_net((st_ts1, st_ts2))
+            critic_loss = self.critic_loss_func(v_ts, ret_ts)
             self.critic_optim.zero_grad()
             critic_loss.backward()
             self.critic_optim.step()
 
-            new_probs = torch.softmax(self.actor_net((states1, states2)), dim=1)
-            entropy_loss = Categorical(new_probs).entropy().mean()
-            old_probs = old_probs.gather(1, actions)
-            new_probs = new_probs.gather(1, actions)
+            new_probs_ts = torch.softmax(self.actor_net((st_ts1, st_ts2)),
+                                         dim=1)
+            entropy_loss = Categorical(new_probs_ts).entropy().mean()
+            op_ts = op_ts.gather(1, a_ts)
+            new_probs_ts = new_probs_ts.gather(1, a_ts)
 
-            ratio = torch.exp(torch.log(new_probs) - torch.log(old_probs))
-            surrogate_loss = ratio * advants
+            ratio = torch.exp(torch.log(new_probs_ts) - torch.log(op_ts))
+            surrogate_loss = ratio * adv_ts
 
             ratio = torch.clamp(ratio, 1.0 - EPSILON, 1.0 + EPSILON)
-            clipped_loss = ratio * advants
+            clipped_loss = ratio * adv_ts
 
             actor_loss = -torch.min(surrogate_loss, clipped_loss).mean()
             actor_loss -= ENTROPY_WEIGHT * entropy_loss

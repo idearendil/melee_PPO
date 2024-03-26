@@ -82,25 +82,25 @@ def run():
 
             env = MeleeEnv(args.iso, players, fast_forward=True)
             env.start()
-            now_obs, _ = env.reset(enums.Stage.BATTLEFIELD)
+            now_s, _ = env.reset(enums.Stage.BATTLEFIELD)
             for step_cnt in range(MAX_STEP):
                 if step_cnt > 100:
                     steps_in_cycle += 1
 
                     action_pair = [0, 0]
-                    a, a_prob = players[0].act(now_obs)
+                    a, a_prob = players[0].act(now_s)
                     action_pair[0] = a
                     action_pair[1] = players[1].act()
 
-                    next_obs, r, done, _ = env.step(*action_pair)
+                    next_s, r, done, _ = env.step(*action_pair)
                     # next_state = normalizer(next_state)
 
                     mask = (1 - done) * 1
 
-                    episode_memory.append([now_obs, a, r, mask, a_prob])
+                    episode_memory.append([now_s, a, r, mask, a_prob])
 
                     score += r
-                    now_obs = next_obs
+                    now_s = next_s
 
                     if done:
                         break

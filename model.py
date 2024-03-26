@@ -14,9 +14,12 @@ class Actor(nn.Module):
     def __init__(self, s_dim, a_dim):
         super(Actor, self).__init__()
 
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=10, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=10, out_channels=10, kernel_size=3, stride=1, padding=1)
-        self.conv3 = nn.Conv2d(in_channels=10, out_channels=10, kernel_size=5, stride=5, padding=0)
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=10, kernel_size=3,
+                               stride=1, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=10, out_channels=10, kernel_size=3,
+                               stride=1, padding=1)
+        self.conv3 = nn.Conv2d(in_channels=10, out_channels=10, kernel_size=5,
+                               stride=5, padding=0)
         self.bn2d_1 = nn.BatchNorm2d(num_features=10)
         self.bn2d_2 = nn.BatchNorm2d(num_features=10)
         self.bn2d_3 = nn.BatchNorm2d(num_features=10)
@@ -75,7 +78,10 @@ class Actor(nn.Module):
         """
         action_prob = torch.softmax(self.forward(s), dim=1).squeeze()
         # a = torch.argmax(action_prob).item()
-        a = choice(list(range(self.a_dim)), 1, replace=False, p=action_prob.cpu().numpy())[0]
+        a = choice(list(range(self.a_dim)),
+                   1,
+                   replace=False,
+                   p=action_prob.cpu().numpy())[0]
         return a, action_prob
 
 
@@ -86,9 +92,12 @@ class Critic(nn.Module):
     def __init__(self, s_dim):
         super(Critic, self).__init__()
 
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=10, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=10, out_channels=10, kernel_size=3, stride=1, padding=1)
-        self.conv3 = nn.Conv2d(in_channels=10, out_channels=10, kernel_size=5, stride=5, padding=0)
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=10, kernel_size=3,
+                               stride=1, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=10, out_channels=10, kernel_size=3,
+                               stride=1, padding=1)
+        self.conv3 = nn.Conv2d(in_channels=10, out_channels=10, kernel_size=5,
+                               stride=5, padding=0)
         self.bn2d_1 = nn.BatchNorm2d(num_features=10)
         self.bn2d_2 = nn.BatchNorm2d(num_features=10)
         self.bn2d_3 = nn.BatchNorm2d(num_features=10)

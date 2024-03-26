@@ -183,17 +183,16 @@ class PPOAgent(Agent):
         self.action = 0
         self.ppo = Ppo(self.s_dim, self.a_dim, self.device)
 
-    def act(self, obs):
+    def act(self, s):
 
-        obs1, obs2 = obs
         with torch.no_grad():
             self.ppo.actor_net.eval()
-            state_tensor1 = torch.from_numpy(np.array(obs1).astype(
+            s_ts1 = torch.from_numpy(np.array(s[0]).astype(
                 np.float32)).unsqueeze(0).to(self.device)
-            state_tensor2 = torch.from_numpy(np.array(obs2).astype(
+            s_ts2 = torch.from_numpy(np.array(s[1]).astype(
                 np.float32)).unsqueeze(0).to(self.device)
             a, a_prob = self.ppo.actor_net.choose_action(
-                (state_tensor1, state_tensor2))
+                (s_ts1, s_ts2))
 
         self.action = a
         return a, a_prob
