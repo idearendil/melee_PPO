@@ -34,11 +34,11 @@ class Ppo:
         self.actor_net.to(device)
         self.critic_net.to(device)
 
-    def choose_action(self, s):
+    def choose_action(self, s, test_mode):
         s_ts1, s_ts2 = self.state_preprocessor(s)
         s_ts1 = torch.from_numpy(s_ts1).unsqueeze(0).to(self.device)
         s_ts2 = torch.from_numpy(s_ts2).unsqueeze(0).to(self.device)
-        return self.actor_net.choose_action((s_ts1, s_ts2))
+        return self.actor_net.choose_action((s_ts1, s_ts2), test_mode)
 
     def push_an_episode(self, data):
         """
@@ -211,25 +211,27 @@ class Ppo:
         def coordinator(x, y):
             return int(min(max(x + 100, 0), 199)), int(min(max(y + 40, 0), 199))
 
-        image_tensor = np.zeros((3, 200, 200), dtype=np.float32)
-        p1_x = s[0]
-        p1_y = s[2]
-        p2_x = s[1]
-        p2_y = s[3]
-        p1_face = 1.0 if s[6] else -1.0
-        p2_face = 1.0 if s[7] else -1.0
-        p1_x, p1_y = coordinator(p1_x, p1_y)
-        p2_x, p2_y = coordinator(p2_x, p2_y)
-        image_tensor[1, p1_x, p1_y] = p1_face
-        image_tensor[2, p2_x, p2_y] = p2_face
+        # image_tensor = np.zeros((3, 200, 200), dtype=np.float32)
+        # p1_x = s[0]
+        # p1_y = s[2]
+        # p2_x = s[1]
+        # p2_y = s[3]
+        # p1_face = 1.0 if s[6] else -1.0
+        # p2_face = 1.0 if s[7] else -1.0
+        # p1_x, p1_y = coordinator(p1_x, p1_y)
+        # p2_x, p2_y = coordinator(p2_x, p2_y)
+        # image_tensor[1, p1_x, p1_y] = p1_face
+        # image_tensor[2, p2_x, p2_y] = p2_face
 
-        for i in range(-70, 71):
-            image_tensor[0, i, 0] = 1.0
-        for i in range(-60, -20):
-            image_tensor[0, i, 27] = 1.0
-        for i in range(21, 61):
-            image_tensor[0, i, 27] = 1.0
-        for i in range(-20, 21):
-            image_tensor[0, i, 54] = 1.0
+        # for i in range(-70, 71):
+        #     image_tensor[0, i, 0] = 1.0
+        # for i in range(-60, -20):
+        #     image_tensor[0, i, 27] = 1.0
+        # for i in range(21, 61):
+        #     image_tensor[0, i, 27] = 1.0
+        # for i in range(-20, 21):
+        #     image_tensor[0, i, 54] = 1.0
+
+        image_tensor = np.zeros((1,), dtype=np.float32)
 
         return (s, image_tensor)

@@ -170,7 +170,7 @@ class Rest(Agent):
 
 
 class PPOAgent(Agent):
-    def __init__(self, character, device):
+    def __init__(self, character, device, test_mode=False):
         super().__init__()
         self.character = character
 
@@ -182,7 +182,8 @@ class PPOAgent(Agent):
 
         self.action = 0
         self.ppo = Ppo(self.s_dim, self.a_dim, self.device)
+        self.test_mode = test_mode
 
     def act(self, s):
-        a, a_prob = self.ppo.choose_action(s)
+        a, a_prob = self.ppo.choose_action(s, self.test_mode)
         return a[0] * 9 + a[1], a_prob

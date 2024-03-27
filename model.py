@@ -4,7 +4,9 @@ The file of actor and critic architectures.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from numpy.random import choice
+import random
+import numpy as np
+from parameters import TAU
 
 
 class Actor(nn.Module):
@@ -14,24 +16,12 @@ class Actor(nn.Module):
     def __init__(self, s_dim, a_dim):
         super(Actor, self).__init__()
 
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=10, kernel_size=3,
-                               stride=1, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=10, out_channels=10, kernel_size=3,
-                               stride=1, padding=1)
-        self.conv3 = nn.Conv2d(in_channels=10, out_channels=10, kernel_size=5,
-                               stride=5, padding=0)
-        self.bn2d_1 = nn.BatchNorm2d(num_features=10)
-        self.bn2d_2 = nn.BatchNorm2d(num_features=10)
-        self.bn2d_3 = nn.BatchNorm2d(num_features=10)
-
-        self.fc1 = nn.Linear(s_dim, 512)
-        self.fc2 = nn.Linear(512, 256)
-        self.fc3 = nn.Linear(256 + 250, 128)
-        self.fc4_1 = nn.Linear(128, 5)
-        self.fc4_2 = nn.Linear(128, 9)
-        self.bn1d_1 = nn.BatchNorm1d(512)
-        self.bn1d_2 = nn.BatchNorm1d(256)
-        self.bn1d_3 = nn.BatchNorm1d(128)
+        self.fc1 = nn.Linear(s_dim, 256)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc3_1 = nn.Linear(128, 5)
+        self.fc3_2 = nn.Linear(128, 9)
+        self.bn1d_1 = nn.BatchNorm1d(256)
+        self.bn1d_2 = nn.BatchNorm1d(128)
         self.a_dim = a_dim
         # self.set_init([self.fc1, self.fc2, self.fc2])
 
@@ -54,23 +44,12 @@ class Actor(nn.Module):
         """
         s1, s2 = s
 
-        s2 = self.bn2d_1(self.conv1(s2))
-        s2 = F.max_pool2d((F.relu(s2)), kernel_size=2)
-        s2 = self.bn2d_2(self.conv2(s2))
-        s2 = F.max_pool2d((F.relu(s2)), kernel_size=2)
-        s2 = self.bn2d_3(self.conv3(s2))
-        s2 = F.max_pool2d((F.relu(s2)), kernel_size=2)
-        s2 = s2.view(-1, 5 * 5 * 10)
-
         s1 = self.bn1d_1(torch.tanh(self.fc1(s1)))
         s1 = self.bn1d_2(torch.tanh(self.fc2(s1)))
 
-        s = torch.concatenate((s1, s2), dim=1)
-        s = self.bn1d_3(torch.tanh(self.fc3(s)))
+        return self.fc3_1(s1), self.fc3_2(s1)
 
-        return self.fc4_1(s), self.fc4_2(s)
-
-    def choose_action(self, s):
+    def choose_action(self, s, test_mode):
         """
         Choose action by normal distribution
 
@@ -88,16 +67,34 @@ class Actor(nn.Module):
             action_button_prob_np = action_button_prob_ts.squeeze().cpu().numpy()
             action_stick_prob_np = action_stick_prob_ts.squeeze().cpu().numpy()
 
-            # a = torch.argmax(action_prob).item()
-            a_button = choice(list(range(5)),
-                              1,
-                              replace=False,
-                              p=action_button_prob_np)[0]
-            a_stick = choice(list(range(9)),
-                             1,
-                             replace=False,
-                             p=action_stick_prob_np)[0]
+            if test_mode:
+                a_button = torch.argmax(action_button_prob_np).item()
+                a_stick = torch.argmax(action_stick_prob_np).item()
+            else:
+                a_button = self.boltzmann(list(range(5)), action_button_prob_np)
+                a_stick = self.boltzmann(list(range(9)), action_stick_prob_np)
         return (a_button, a_stick), (action_button_prob_np, action_stick_prob_np)
+
+    def boltzmann(self, actions, weights):
+        """
+        Boltzmann greedy exploration method.
+
+        :arg actions:
+            tuple of possible actions.
+
+        :arg weights:
+            numpy array(float) of weights for each possible action
+
+        :returns:
+            chosen action among actions
+        """
+        # print(weights)
+        max_weight = np.max(weights)
+        exp_weights = np.exp((weights - max_weight) / TAU)
+        sum_exp_weights = np.sum(exp_weights)
+        final_weights = exp_weights / sum_exp_weights
+        # print(final_weights)
+        return random.choices(actions, weights=final_weights, k=1)[0]
 
 
 class Critic(nn.Module):
@@ -107,21 +104,11 @@ class Critic(nn.Module):
     def __init__(self, s_dim):
         super(Critic, self).__init__()
 
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=10, kernel_size=3,
-                               stride=1, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=10, out_channels=10, kernel_size=3,
-                               stride=1, padding=1)
-        self.conv3 = nn.Conv2d(in_channels=10, out_channels=10, kernel_size=5,
-                               stride=5, padding=0)
-        self.bn2d_1 = nn.BatchNorm2d(num_features=10)
-        self.bn2d_2 = nn.BatchNorm2d(num_features=10)
-        self.bn2d_3 = nn.BatchNorm2d(num_features=10)
-
-        self.fc1 = nn.Linear(s_dim, 512)
-        self.fc2 = nn.Linear(512, 256)
-        self.fc3 = nn.Linear(256 + 250, 1)
-        self.bn1d_1 = nn.BatchNorm1d(512)
-        self.bn1d_2 = nn.BatchNorm1d(256)
+        self.fc1 = nn.Linear(s_dim, 256)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc3 = nn.Linear(128, 1)
+        self.bn1d_1 = nn.BatchNorm1d(256)
+        self.bn1d_2 = nn.BatchNorm1d(128)
         # self.set_init([self.fc1, self.fc2, self.fc2])
 
     def set_init(self, layers):
@@ -143,17 +130,7 @@ class Critic(nn.Module):
         """
         s1, s2 = s
 
-        s2 = self.bn2d_1(self.conv1(s2))
-        s2 = F.max_pool2d((F.relu(s2)), kernel_size=2)
-        s2 = self.bn2d_2(self.conv2(s2))
-        s2 = F.max_pool2d((F.relu(s2)), kernel_size=2)
-        s2 = self.bn2d_3(self.conv3(s2))
-        s2 = F.max_pool2d((F.relu(s2)), kernel_size=2)
-        s2 = s2.view(-1, 5 * 5 * 10)
-
         s1 = self.bn1d_1(torch.tanh(self.fc1(s1)))
         s1 = self.bn1d_2(torch.tanh(self.fc2(s1)))
 
-        s = torch.concatenate((s1, s2), dim=1)
-
-        return self.fc3(s)
+        return self.fc3(s1)

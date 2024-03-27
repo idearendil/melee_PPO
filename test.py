@@ -5,13 +5,11 @@ Testing saved models within within melee environment.
 import argparse
 import torch
 import numpy as np
-import psutil
 from melee import enums
 from parameters import MAX_STEP
 
 # from observation_normalizer import ObservationNormalizer
-from melee_env.agents.util import ObservationSpace
-from melee_env.env import MeleeEnv
+from melee_env.myenv import MeleeEnv
 from melee_env.agents.basic import PPOAgent, NOOP
 
 
@@ -44,8 +42,6 @@ def run():
     )
     print(device)
 
-    obs_space = ObservationSpace()
-
     torch.manual_seed(500)
     np.random.seed(500)
 
@@ -58,34 +54,35 @@ def run():
     players[0].ppo.actor_net = torch.load(args.model_path + "actor_net.pt")
     players[0].ppo.critic_net = torch.load(args.model_path + "critic_net.pt")
     # normalizer.load(args.model_path)
-    episode_id = 0
 
     for episode_id in range(args.episode_num):
+        score = 0
+
         env = MeleeEnv(args.iso, players, fast_forward=True)
         env.start()
-        gamestate, done = env.setup(enums.Stage.BATTLEFIELD)
+        now_s, _ = env.reset(enums.Stage.BATTLEFIELD)
+        for step_cnt in range(MAX_STEP):
+            if step_cnt > 100:
 
-        now_obs, _, _, _ = obs_space(gamestate, done)
-        score = 0
-        for _ in range(MAX_STEP):
+                action_pair = [0, 0]
+                a, _ = players[0].act(now_s)
+                action_pair[0] = a
+                action_pair[1] = players[1].act()
 
-            _, _ = players[0].act(now_obs)
-            players[1].act(gamestate)
-            gamestate, done = env.step()
-            next_obs, r, _, _ = obs_space(gamestate, done)
-            now_obs = next_obs
+                next_s, r, done, _ = env.step(*action_pair)
+                # next_state = normalizer(next_state)
 
-            score += r
+                score += r
+                now_s = next_s
 
-            if done:
-                break
-        for proc in psutil.process_iter():
-            if proc.name() == "Slippi Dolphin.exe":
-                parent_pid = proc.pid
-                parent = psutil.Process(parent_pid)
-                for child in parent.children(recursive=True):
-                    child.kill()
-                parent.kill()
+                if done:
+                    break
+            else:
+                action_pair = [0, 0]
+                now_s, _, _, _ = env.step(*action_pair)
+
+        env.close()
+
         print("episode: ", episode_id, "\tscore: ", score)
 
 
