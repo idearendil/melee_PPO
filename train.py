@@ -96,6 +96,8 @@ def run():
                     # next_state = normalizer(next_state)
 
                     mask = (1 - done) * 1
+                    if now_s[7] > next_s[7]:
+                        mask = 0
 
                     episode_memory.append([now_s, a, r, mask, a_prob])
 

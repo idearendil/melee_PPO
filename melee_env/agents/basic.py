@@ -174,7 +174,7 @@ class PPOAgent(Agent):
         super().__init__()
         self.character = character
 
-        self.s_dim = 941     # needs modification
+        self.s_dim = 106     # needs modification
         self.a_dim = ActionSpace().action_space.shape[0]
         self.device = device
 
@@ -184,4 +184,5 @@ class PPOAgent(Agent):
         self.ppo = Ppo(self.s_dim, self.a_dim, self.device)
 
     def act(self, s):
-        return self.ppo.choose_action(s)
+        a, a_prob = self.ppo.choose_action(s)
+        return a[0] * 9 + a[1], a_prob

@@ -26,9 +26,12 @@ class Actor(nn.Module):
 
         self.fc1 = nn.Linear(s_dim, 512)
         self.fc2 = nn.Linear(512, 256)
-        self.fc3 = nn.Linear(256 + 250, a_dim)
+        self.fc3 = nn.Linear(256 + 250, 128)
+        self.fc4_1 = nn.Linear(128, 5)
+        self.fc4_2 = nn.Linear(128, 9)
         self.bn1d_1 = nn.BatchNorm1d(512)
         self.bn1d_2 = nn.BatchNorm1d(256)
+        self.bn1d_3 = nn.BatchNorm1d(128)
         self.a_dim = a_dim
         # self.set_init([self.fc1, self.fc2, self.fc2])
 
@@ -63,8 +66,9 @@ class Actor(nn.Module):
         s1 = self.bn1d_2(torch.tanh(self.fc2(s1)))
 
         s = torch.concatenate((s1, s2), dim=1)
+        s = self.bn1d_3(torch.tanh(self.fc3(s)))
 
-        return self.fc3(s)
+        return self.fc4_1(s), self.fc4_2(s)
 
     def choose_action(self, s):
         """
@@ -78,14 +82,22 @@ class Actor(nn.Module):
         """
         with torch.no_grad():
             self.eval()
-            action_prob_ts = torch.softmax(self.forward(s), dim=1)
-            action_prob_np = action_prob_ts.squeeze().cpu().numpy()
+            action_button_prob_ts, action_stick_prob_ts = self.forward(s)
+            action_button_prob_ts = torch.softmax(action_button_prob_ts, dim=1)
+            action_stick_prob_ts = torch.softmax(action_stick_prob_ts, dim=1)
+            action_button_prob_np = action_button_prob_ts.squeeze().cpu().numpy()
+            action_stick_prob_np = action_stick_prob_ts.squeeze().cpu().numpy()
+
             # a = torch.argmax(action_prob).item()
-            a = choice(list(range(self.a_dim)),
-                       1,
-                       replace=False,
-                       p=action_prob_np)[0]
-        return a, action_prob_np
+            a_button = choice(list(range(5)),
+                              1,
+                              replace=False,
+                              p=action_button_prob_np)[0]
+            a_stick = choice(list(range(9)),
+                             1,
+                             replace=False,
+                             p=action_stick_prob_np)[0]
+        return (a_button, a_stick), (action_button_prob_np, action_stick_prob_np)
 
 
 class Critic(nn.Module):
