@@ -7,150 +7,15 @@ class ObservationSpace:
     def __init__(self):
         self.previous_gamestate = None
         self.current_gamestate = None
-        self.curr_action = None
-        self.player_count = None
         self.previous_actions = deque(maxlen=10)
         self.previous_actions.extend(((0, 0), (0, 0)) * 5)
 
-    def set_player_keys(self, keys):
-        self.player_keys = keys
-
-    def get_stocks(self, gamestate):
-        stocks = [gamestate.players[i].stock for i in list(gamestate.players.keys())]
-        return np.array(stocks, dtype=np.float32)
-
-    def get_actions(self, gamestate):
-        actions = np.zeros((len(gamestate.players.keys()), 386), dtype=np.float32)
-        if gamestate.players[1].action.value < 386:
-            actions[0, gamestate.players[1].action.value] = 1.0
-        if gamestate.players[2].action.value < 386:
-            actions[1, gamestate.players[2].action.value] = 1.0
-        return actions.reshape((-1,))
-
-    def get_action_frames(self, gamestate):
-        print('action type:', gamestate.players[1].action.value,
-              'action frame:', gamestate.players[1].action_frame)
-        action_frames = [
-            gamestate.players[i].action_frame for i in list(gamestate.players.keys())
-        ]
-        return np.array(action_frames, dtype=np.float32)
-
-    def get_speeds(self, gamestate):
-        speed_air_x_self = [
-            gamestate.players[i].speed_air_x_self
-            for i in list(gamestate.players.keys())
-        ]
-        speed_ground_x_self = [
-            gamestate.players[i].speed_ground_x_self
-            for i in list(gamestate.players.keys())
-        ]
-        speed_x_attack = [
-            gamestate.players[i].speed_x_attack for i in list(gamestate.players.keys())
-        ]
-        speed_y_attack = [
-            gamestate.players[i].speed_y_attack for i in list(gamestate.players.keys())
-        ]
-        speed_y_self = [
-            gamestate.players[i].speed_y_self for i in list(gamestate.players.keys())
-        ]
-        return np.array(
-            sum(
-                [
-                    speed_air_x_self,
-                    speed_ground_x_self,
-                    speed_x_attack,
-                    speed_y_attack,
-                    speed_y_self,
-                ],
-                [],
-            ),
-            dtype=np.float32,
-        )
-
-    def get_states(self, gamestate):
-        facing = [gamestate.players[i].facing for i in list(gamestate.players.keys())]
-        hitstun_frames_left = [
-            gamestate.players[i].hitstun_frames_left
-            for i in list(gamestate.players.keys())
-        ]
-        invulnerability_frames_left = [
-            gamestate.players[i].invulnerability_left
-            for i in list(gamestate.players.keys())
-        ]
-        jumps_left = [
-            gamestate.players[i].jumps_left for i in list(gamestate.players.keys())
-        ]
-        off_stage = [
-            gamestate.players[i].off_stage for i in list(gamestate.players.keys())
-        ]
-        on_ground = [
-            gamestate.players[i].on_ground for i in list(gamestate.players.keys())
-        ]
-        percent = [gamestate.players[i].percent for i in list(gamestate.players.keys())]
-        shield_strength = [
-            gamestate.players[i].shield_strength for i in list(gamestate.players.keys())
-        ]
-        return np.array(
-            sum(
-                [
-                    facing,
-                    hitstun_frames_left,
-                    invulnerability_frames_left,
-                    jumps_left,
-                    off_stage,
-                    on_ground,
-                    percent,
-                    shield_strength,
-                ],
-                [],
-            ),
-            dtype=np.float32,
-        )
-
-    def get_positions(self, gamestate):
-        x_positions = [
-            gamestate.players[i].position.x for i in list(gamestate.players.keys())
-        ]
-        y_positions = [
-            gamestate.players[i].position.y for i in list(gamestate.players.keys())
-        ]
-        return np.array(sum([x_positions, y_positions], []), dtype=np.float32)
-
-    def get_relative_distance(self, gamestate):
-        if len(gamestate.players.keys()) > 2:
-            return np.zeros((len(gamestate.players.keys()), 1))
-        distances = [
-            gamestate.players[1].position.x - gamestate.players[2].position.x,
-            gamestate.players[1].position.y - gamestate.players[2].position.y,
-        ]
-        return np.array(distances, dtype=np.float32)
-
-    def get_previous_actions(self, action):
-        actions = np.zeros((14 * 10,), dtype=np.float32)
-        self.previous_actions.append((action // 9, action % 9))
-        for i in range(10):
-            actions[i * 14 + self.previous_actions[i][0]] = 1.0
-            actions[i * 14 + 5 + self.previous_actions[i][1]] = 1.0
-        return actions
-
-    def __call__(self, gamestate, action):
+    def __call__(self, gamestate, actions):
         reward = 0
         info = None
         self.current_gamestate = gamestate
-        self.player_count = len(list(gamestate.players.keys()))
 
-        observation = np.concatenate(
-            (
-                self.get_positions(gamestate),
-                self.get_relative_distance(gamestate),
-                # self.get_stocks(gamestate),
-                self.get_states(gamestate),
-                self.get_action_frames(gamestate),
-                self.get_speeds(gamestate),
-                self.get_previous_actions(action),
-            ),
-            axis=0,
-        )
+        self.previous_actions.append((actions[0], actions[1]))
 
         if self.previous_gamestate is not None:
             p1_dmg = (
@@ -222,7 +87,7 @@ class ObservationSpace:
         )
         done = not np.sum(stocks[np.argsort(stocks)][::-1][1:])
 
-        return observation, reward, done, info
+        return (gamestate, np.array(self.previous_actions)), reward, done, info
 
     def reset(self):
         self.__init__()

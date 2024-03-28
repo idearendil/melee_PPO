@@ -8,10 +8,11 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from melee import enums
-from parameters import MAX_STEP, CYCLE_NUM, MIN_STEPS_IN_CYCLE, STATE_DIM
+from parameters import MAX_STEP, CYCLE_NUM, MIN_TUPLES_IN_CYCLE, STATE_DIM
 # from observation_normalizer import ObservationNormalizer
 from melee_env.myenv import MeleeEnv
 from melee_env.agents.basic import PPOAgent, NOOP
+from collections import deque
 
 
 parser = argparse.ArgumentParser()
@@ -54,7 +55,7 @@ def run():
     torch.manual_seed(500)
     np.random.seed(500)
 
-    players = [PPOAgent(enums.Character.FOX, device, STATE_DIM),
+    players = [PPOAgent(enums.Character.FOX, 1, 2, device, STATE_DIM),
                NOOP(enums.Character.FOX)]
 
     # normalizer = ObservationNormalizer(s_dim)
@@ -71,12 +72,13 @@ def run():
             outfile.write("episode_id,score\n")
     episode_id = 0
 
+    episode_buffer = deque(maxlen=2)
+
     for cycle_id in range(CYCLE_NUM):
         scores = []
-        steps_in_cycle = 0
         episode_memory = []
         players[0].ppo.buffer.buffer.clear()  # off-policy? on-policy?
-        while steps_in_cycle < MIN_STEPS_IN_CYCLE:
+        while players[0].ppo.buffer.size() < MIN_TUPLES_IN_CYCLE:
             episode_id += 1
             score = 0
 
@@ -85,7 +87,6 @@ def run():
             now_s, _ = env.reset(enums.Stage.BATTLEFIELD)
             for step_cnt in range(MAX_STEP):
                 if step_cnt > 100:
-                    steps_in_cycle += 1
 
                     action_pair = [0, 0]
                     a, a_prob = players[0].act(now_s)
@@ -96,10 +97,13 @@ def run():
                     # next_state = normalizer(next_state)
 
                     mask = (1 - done) * 1
-                    if now_s[7] > next_s[7]:
-                        mask = 0
 
-                    episode_memory.append([now_s, a, r, mask, a_prob])
+                    if now_s[0].players[1].action != next_s[0].players[1].action:
+                        episode_memory.append(episode_buffer[0])
+                    else:
+                        if len(episode_buffer) > 1:
+                            episode_buffer[1][2] += episode_buffer[0][2]
+                    episode_buffer.append([now_s, a, r, mask, a_prob])
 
                     score += r
                     now_s = next_s

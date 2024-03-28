@@ -44,7 +44,7 @@ class ReplayBuffer():
             a_lst2.append(a2)
             adv_lst.append(adv)
             ret_lst.append(ret)
-            op_lst1.append(op1)
+            op_lst1.append(op1)     
             op_lst2.append(op2)
 
         return s_lst, a_lst1, a_lst2, adv_lst, ret_lst, op_lst1, op_lst2

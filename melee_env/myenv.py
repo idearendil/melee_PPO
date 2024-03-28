@@ -1,11 +1,10 @@
 from melee_env.dconfig import DolphinConfig
 import melee
 from melee import enums
-import numpy as np
 import sys
 from melee_env.agents.util import ObservationSpace
+import numpy as np
 import psutil
-import time
 
 
 class MeleeEnv:
@@ -107,7 +106,7 @@ class MeleeEnv:
 
         if self.gamestate.menu_state in [melee.Menu.IN_GAME, melee.Menu.SUDDEN_DEATH]:
             self.gamestate = self.console.step()
-        return self.observation_space(self.gamestate, actions[0])
+        return self.observation_space(self.gamestate, actions)
 
     def reset(self, stage):
         self.observation_space.reset()
@@ -144,8 +143,9 @@ class MeleeEnv:
 
             elif self.gamestate.menu_state in [melee.Menu.IN_GAME,
                                                melee.Menu.SUDDEN_DEATH]:
-                obs, _, _, _ = self.observation_space(self.gamestate, 0)
-                return obs, False  # game is not done on start
+                previous_actions = np.zeros((10, 2), dtype=np.float32)
+                return (self.gamestate, previous_actions), False
+                # game is not done on start
 
             else:
                 melee.MenuHelper.choose_versus_mode(

@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from melee import enums
+from melee.stages import EDGE_POSITION
 import numpy as np
 from melee_env.agents.util import *
 import code
@@ -170,9 +171,12 @@ class Rest(Agent):
 
 
 class PPOAgent(Agent):
-    def __init__(self, character, device, s_dim, test_mode=False):
+    def __init__(self, character, agent_id, opponent_id, device, s_dim,
+                 test_mode=False, auto_fire=True):
         super().__init__()
         self.character = character
+        self.agent_id = agent_id
+        self.opponent_id = opponent_id
 
         self.s_dim = s_dim     # needs modification
         self.a_dim = ActionSpace().action_space.shape[0]
@@ -181,9 +185,46 @@ class PPOAgent(Agent):
         self.action_space = ActionSpace()
 
         self.action = 0
-        self.ppo = Ppo(self.s_dim, self.a_dim, self.device)
+        self.ppo = Ppo(
+            self.s_dim, self.a_dim, self.agent_id, self.opponent_id, self.device)
         self.test_mode = test_mode
+        self.auto_fire = auto_fire
+        self.firefoxing = False
+        self.requested_firefoxing = False
 
     def act(self, s):
         a, a_prob = self.ppo.choose_action(s, self.test_mode)
+
+        if self.auto_fire and s[0].players[self.agent_id].y < -10:
+            p1 = s[0].players[self.agent_id]
+            if p1.action in [
+                enums.Action.SWORD_DANCE_3_MID,
+                enums.Action.SWORD_DANCE_3_LOW,
+                enums.Action.SWORD_DANCE_3_HIGH,
+                enums.Action.SWORD_DANCE_3_LOW_AIR,
+                enums.Action.SWORD_DANCE_3_MID_AIR,
+                enums.Action.SWORD_DANCE_3_HIGH_AIR,
+                enums.Action.SWORD_DANCE_4_MID
+            ]:
+                self.firefoxing = True
+            else:
+                self.firefoxing = False
+            if not self.firefoxing:
+                if self.requested_firefoxing:
+                    self.requested_firefoxing = False
+                    return 0, a_prob
+                else:
+                    self.requested_firefoxing = True
+                    return 19, a_prob
+            else:
+                edge = EDGE_POSITION.get(s[0].stage)
+                if p1.position.x < -edge - 10:
+                    return 2, a_prob
+                elif p1.position.x > edge + 10:
+                    return 8, a_prob
+                else:
+                    return 5, a_prob
+        else:
+            self.firefoxing = False
+
         return a[0] * 9 + a[1], a_prob

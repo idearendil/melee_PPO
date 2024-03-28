@@ -16,7 +16,7 @@ class Ppo:
     """
     The class which Proximal Policy Optimization is implemented in.
     """
-    def __init__(self, s_dim, a_dim, device):
+    def __init__(self, s_dim, a_dim, agent_id, opponent_id, device):
         self.device = device
         self.actor_net = Actor(s_dim, a_dim).to(self.device)
         self.critic_net = Critic(s_dim).to(self.device)
@@ -26,6 +26,9 @@ class Ppo:
         )
         self.critic_loss_func = torch.nn.MSELoss()
         self.buffer = ReplayBuffer(BUFFER_SIZE)
+        self.s_dim = s_dim
+        self.agent_id = agent_id
+        self.opponent_id = opponent_id
 
     def models_to_device(self, device):
         """
@@ -50,18 +53,20 @@ class Ppo:
             None
         """
 
-        s_lst1, a_lst, r_lst, mask_lst, prob_lst = \
+        s_lst, a_lst, r_lst, mask_lst, prob_lst = \
             [], [], [], [], []
         for s, a, r, mask, prob in data:
-            s_lst1.append(s)
+            s_lst.append(s)
             a_lst.append((a // 9, a % 9))
             r_lst.append(r)
             mask_lst.append(mask)
             prob_lst.append((torch.Tensor(prob[0]), torch.Tensor(prob[1])))
 
+        s_lst1 = []
         s_lst2 = []
-        for s in s_lst1:
-            _, s2 = self.state_preprocessor(s)
+        for s in s_lst:
+            s1, s2 = self.state_preprocessor(s)
+            s_lst1.append(s1)
             s_lst2.append(s2)
 
         s_ts1 = torch.Tensor(
@@ -76,15 +81,15 @@ class Ppo:
             v_lst = []
             for idx in range(0, len(s_ts1), BATCH_SIZE):
                 idx_end = min(idx+BATCH_SIZE, len(s_ts1))
-                v_lst.append(self.critic_net((s_ts1[idx:idx_end],
-                                              s_ts2[idx:idx_end])).cpu())
+                v_lst.append(self.critic_net(
+                    (s_ts1[idx:idx_end], s_ts2[idx:idx_end])).cpu())
             v_ts = torch.concatenate(v_lst, dim=0)
             ret_ts, adv_ts = self.get_gae(r_ts, masks, v_ts)
 
         for idx, _ in enumerate(s_ts1):
             if idx+DELAY >= len(s_ts1):
                 break
-            self.buffer.push((s_lst1[idx],
+            self.buffer.push((s_lst[idx],
                               a_lst[idx][0],
                               a_lst[idx][1],
                               adv_ts[idx+DELAY].item(),
@@ -103,12 +108,14 @@ class Ppo:
         critic_loss_lst, actor_loss_lst = [], []
         for batch_id in range(BATCH_NUM):
 
-            s_lst1, a_lst1, a_lst2, adv_lst, ret_lst, op_lst1, op_lst2 = \
+            s_lst, a_lst1, a_lst2, adv_lst, ret_lst, op_lst1, op_lst2 = \
                 self.buffer.pull(BATCH_SIZE)
 
+            s_lst1 = []
             s_lst2 = []
-            for s in s_lst1:
-                _, s2 = self.state_preprocessor(s)
+            for s in s_lst:
+                s1, s2 = self.state_preprocessor(s)
+                s_lst1.append(s1)
                 s_lst2.append(s2)
 
             st_ts1 = torch.Tensor(np.stack(s_lst1, axis=0)).to(self.device)
@@ -156,11 +163,12 @@ class Ppo:
             actor_loss.backward()
             self.actor_optim.step()
 
-            actor_loss_lst.append(actor_loss.item())            
+            actor_loss_lst.append(actor_loss.item())
             critic_loss_lst.append(critic_loss.item())
-            if batch_id % 10 == 0:
-                print(f'critic loss: {sum(critic_loss_lst)/len(critic_loss_lst):.8f}',
-                      f'\t\tactor loss: {sum(actor_loss_lst)/len(actor_loss_lst):.8f}')
+            if batch_id % 2 == 0:
+                print(
+                    f'critic loss: {sum(critic_loss_lst)/len(critic_loss_lst):.8f}',
+                    f'\t\tactor loss: {sum(actor_loss_lst)/len(actor_loss_lst):.8f}')
                 actor_loss_lst.clear()
                 critic_loss_lst.clear()
 
@@ -206,32 +214,55 @@ class Ppo:
         return returns, advants
 
     def state_preprocessor(self, s):
-        # size = (200, 200)
-        # center point = (0, 0) => (100, 40) <= this might be modified
-        def coordinator(x, y):
-            return int(min(max(x + 100, 0), 199)), int(min(max(y + 40, 0), 199))
 
-        # image_tensor = np.zeros((3, 200, 200), dtype=np.float32)
-        # p1_x = s[0]
-        # p1_y = s[2]
-        # p2_x = s[1]
-        # p2_y = s[3]
-        # p1_face = 1.0 if s[6] else -1.0
-        # p2_face = 1.0 if s[7] else -1.0
-        # p1_x, p1_y = coordinator(p1_x, p1_y)
-        # p2_x, p2_y = coordinator(p2_x, p2_y)
-        # image_tensor[1, p1_x, p1_y] = p1_face
-        # image_tensor[2, p2_x, p2_y] = p2_face
+        gamestate, previous_actions = s
 
-        # for i in range(-70, 71):
-        #     image_tensor[0, i, 0] = 1.0
-        # for i in range(-60, -20):
-        #     image_tensor[0, i, 27] = 1.0
-        # for i in range(21, 61):
-        #     image_tensor[0, i, 27] = 1.0
-        # for i in range(-20, 21):
-        #     image_tensor[0, i, 54] = 1.0
+        p1 = gamestate.players[self.agent_id]
+        p2 = gamestate.players[self.opponent_id]
 
-        image_tensor = np.zeros((1,), dtype=np.float32)
+        state1 = np.zeros((self.s_dim,), dtype=np.float32)
 
-        return (s, image_tensor)
+        state1[0] = p1.position.x
+        state1[1] = p1.position.y
+        state1[2] = p2.position.x
+        state1[3] = p2.position.y
+        state1[4] = p1.position.x - p2.position.x
+        state1[5] = p1.position.y - p2.position.y
+        state1[6] = p1.facing * 1.0
+        state1[7] = p2.facing * 1.0
+        state1[8] = p1.hitstun_frames_left
+        state1[9] = p2.hitstun_frames_left
+        state1[10] = p1.invulnerability_left
+        state1[11] = p2.invulnerability_left
+        state1[12] = p1.jumps_left
+        state1[13] = p2.jumps_left
+        state1[14] = p1.off_stage * 1.0
+        state1[15] = p2.off_stage * 1.0
+        state1[16] = p1.on_ground * 1.0
+        state1[17] = p2.on_ground * 1.0
+        state1[18] = p1.percent
+        state1[19] = p2.percent
+        state1[20] = p1.shield_strength
+        state1[21] = p2.shield_strength
+        state1[22] = p1.speed_air_x_self
+        state1[23] = p2.speed_air_x_self
+        state1[24] = p1.speed_ground_x_self
+        state1[25] = p2.speed_ground_x_self
+        state1[26] = p1.speed_x_attack
+        state1[27] = p2.speed_x_attack
+        state1[28] = p1.speed_y_attack
+        state1[29] = p2.speed_y_attack
+        state1[30] = p1.speed_y_self
+        state1[31] = p2.speed_y_self
+        state1[32] = p1.action_frame
+        state1[33] = p2.action_frame
+
+        for i in range(5):
+            button = previous_actions[i, self.agent_id-1] // 9
+            stick = previous_actions[i, self.agent_id-1] % 9
+            state1[33 + i*14 + button] = 1.0
+            state1[33 + i*14 + 5 + stick] = 1.0
+
+        state2 = np.zeros((1,), dtype=np.float32)
+
+        return (state1, state2)
