@@ -9,8 +9,8 @@ class ObservationSpace:
         self.current_gamestate = None
         self.curr_action = None
         self.player_count = None
-        self.previous_actions = deque(maxlen=5)
-        self.previous_actions.extend(((0, 0), (0, 0), (0, 0), (0, 0), (0, 0)))
+        self.previous_actions = deque(maxlen=10)
+        self.previous_actions.extend(((0, 0), (0, 0)) * 5)
 
     def set_player_keys(self, keys):
         self.player_keys = keys
@@ -28,6 +28,8 @@ class ObservationSpace:
         return actions.reshape((-1,))
 
     def get_action_frames(self, gamestate):
+        print('action type:', gamestate.players[1].action.value,
+              'action frame:', gamestate.players[1].action_frame)
         action_frames = [
             gamestate.players[i].action_frame for i in list(gamestate.players.keys())
         ]
@@ -124,9 +126,9 @@ class ObservationSpace:
         return np.array(distances, dtype=np.float32)
 
     def get_previous_actions(self, action):
-        actions = np.zeros((14 * 5,), dtype=np.float32)
+        actions = np.zeros((14 * 10,), dtype=np.float32)
         self.previous_actions.append((action // 9, action % 9))
-        for i in range(5):
+        for i in range(10):
             actions[i * 14 + self.previous_actions[i][0]] = 1.0
             actions[i * 14 + 5 + self.previous_actions[i][1]] = 1.0
         return actions
@@ -141,7 +143,7 @@ class ObservationSpace:
             (
                 self.get_positions(gamestate),
                 self.get_relative_distance(gamestate),
-                self.get_stocks(gamestate),
+                # self.get_stocks(gamestate),
                 self.get_states(gamestate),
                 self.get_action_frames(gamestate),
                 self.get_speeds(gamestate),
@@ -150,50 +152,55 @@ class ObservationSpace:
             axis=0,
         )
 
-        # if self.previous_gamestate is not None:
-        #     p1_dmg = (
-        #         self.current_gamestate.players[1].percent
-        #         - self.previous_gamestate.players[1].percent
-        #     )
-        #     p1_shield_dmg = (
-        #         self.previous_gamestate.players[1].shield_strength
-        #         - self.current_gamestate.players[1].shield_strength
-        #     )
-        #     p1_stock_loss = int(self.previous_gamestate.players[1].stock) - int(
-        #         self.current_gamestate.players[1].stock
-        #     )
-        #     p2_dmg = (
-        #         self.current_gamestate.players[2].percent
-        #         - self.previous_gamestate.players[2].percent
-        #     )
-        #     p2_shield_dmg = (
-        #         self.previous_gamestate.players[2].shield_strength
-        #         - self.current_gamestate.players[2].shield_strength
-        #     )
-        #     p2_stock_loss = int(self.previous_gamestate.players[2].stock) - int(
-        #         self.current_gamestate.players[2].stock
-        #     )
+        if self.previous_gamestate is not None:
+            p1_dmg = (
+                self.current_gamestate.players[1].percent
+                - self.previous_gamestate.players[1].percent
+            )
+            p1_shield_dmg = (
+                self.previous_gamestate.players[1].shield_strength
+                - self.current_gamestate.players[1].shield_strength
+            )
+            p1_stock_loss = int(self.previous_gamestate.players[1].stock) - int(
+                self.current_gamestate.players[1].stock
+            )
+            p2_dmg = (
+                self.current_gamestate.players[2].percent
+                - self.previous_gamestate.players[2].percent
+            )
+            p2_shield_dmg = (
+                self.previous_gamestate.players[2].shield_strength
+                - self.current_gamestate.players[2].shield_strength
+            )
+            p2_stock_loss = int(self.previous_gamestate.players[2].stock) - int(
+                self.current_gamestate.players[2].stock
+            )
+            p1_off_stage = gamestate.players[1].off_stage * 1.0
 
-        #     p1_dmg = max(p1_dmg, 0)
-        #     p2_dmg = max(p2_dmg, 0)
-        #     if p1_stock_loss > 1:
-        #         p1_stock_loss = 0
-        #     if p2_stock_loss > 1:
-        #         p2_stock_loss = 0
-        #     p1_stock_loss = max(p1_stock_loss, 0)
-        #     p2_stock_loss = max(p2_stock_loss, 0)
+            p1_dmg = max(p1_dmg, 0)
+            p2_dmg = max(p2_dmg, 0)
+            if p1_stock_loss > 1:
+                p1_stock_loss = 0
+            if p2_stock_loss > 1:
+                p2_stock_loss = 0
+            p1_stock_loss = max(p1_stock_loss, 0)
+            p2_stock_loss = max(p2_stock_loss, 0)
 
-        #     w_dmg, w_shield, w_stock = 0.1, 0.02, 10
-        #     p1_loss = (
-        #         w_dmg * p1_dmg + w_shield * p1_shield_dmg + w_stock * p1_stock_loss
-        #     )
-        #     p2_loss = (
-        #         w_dmg * p2_dmg + w_shield * p2_shield_dmg + w_stock * p2_stock_loss
-        #     )
+            w_dmg, w_shield, w_stock, w_off_stage = 0.1, 0.02, 10, 0.2
+            p1_loss = (
+                w_dmg * p1_dmg
+                + w_shield * p1_shield_dmg
+                + w_stock * p1_stock_loss
+                + w_off_stage * p1_off_stage)
+            p2_loss = (
+                w_dmg * p2_dmg
+                + w_shield * p2_shield_dmg
+                + w_stock * p2_stock_loss
+            )
 
-        #     reward = p2_loss - p1_loss
-        # else:
-        #     reward = 0
+            reward = p2_loss - p1_loss
+        else:
+            reward = 0
 
         # if self.previous_gamestate is not None:
         #     p1_stock_loss = int(self.previous_gamestate.players[1].stock) - int(
@@ -206,7 +213,7 @@ class ObservationSpace:
         # reward = 1.0 if gamestate.players[1].off_stage else 0.0
         # print(reward)
 
-        reward = 1.0 if action == 0 else 0.0
+        # reward = 1.0 if action == 0 else 0.0
 
         self.previous_gamestate = self.current_gamestate
 

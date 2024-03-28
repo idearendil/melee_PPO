@@ -170,11 +170,11 @@ class Rest(Agent):
 
 
 class PPOAgent(Agent):
-    def __init__(self, character, device, test_mode=False):
+    def __init__(self, character, device, s_dim, test_mode=False):
         super().__init__()
         self.character = character
 
-        self.s_dim = 106     # needs modification
+        self.s_dim = s_dim     # needs modification
         self.a_dim = ActionSpace().action_space.shape[0]
         self.device = device
 

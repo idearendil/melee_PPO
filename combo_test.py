@@ -2,7 +2,6 @@ from melee import enums
 from melee_env.myenv import MeleeEnv
 from melee_env.agents.basic import NOOP
 import argparse
-import psutil
 from melee_env.agents.util import ActionSpace, ObservationSpace
 from collections import deque
 
@@ -21,8 +20,8 @@ action_space = ActionSpace()
 observation_space = ObservationSpace()
 
 # action_buffer = deque(maxlen=3)
-# action_sequence = [7, 7, 7, 7, 7, 7, 7, 7]
-action_sequence = [7] * 30
+action_sequence = [0, 3, 3, 3, 3, 9, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+# action_sequence = [7] * 30
 # action_sequence[59] = 12
 action_idx = 0
 
@@ -36,8 +35,9 @@ for step_cnt in range(300):
             action_pair = [action_sequence[action_idx], 0]
             action_idx += 1
 
+        print('control: ', action_pair[0])
         next_obs, r, done, _ = env.step(*action_pair)
-        print('step_cnt', step_cnt, ':', next_obs[0], next_obs[1])
+        # print('step_cnt', step_cnt, ':', next_obs[0], next_obs[1])
     else:
         action_pair = [0, 0]
         next_obs, r, done, _ = env.step(*action_pair)

@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from melee import enums
-from parameters import MAX_STEP, CYCLE_NUM, MIN_STEPS_IN_CYCLE
+from parameters import MAX_STEP, CYCLE_NUM, MIN_STEPS_IN_CYCLE, STATE_DIM
 # from observation_normalizer import ObservationNormalizer
 from melee_env.myenv import MeleeEnv
 from melee_env.agents.basic import PPOAgent, NOOP
@@ -54,7 +54,7 @@ def run():
     torch.manual_seed(500)
     np.random.seed(500)
 
-    players = [PPOAgent(enums.Character.FOX, device),
+    players = [PPOAgent(enums.Character.FOX, device, STATE_DIM),
                NOOP(enums.Character.FOX)]
 
     # normalizer = ObservationNormalizer(s_dim)

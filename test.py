@@ -45,9 +45,6 @@ def run():
     torch.manual_seed(500)
     np.random.seed(500)
 
-    with open("log_" + args.env_name + ".csv", "a", encoding="utf-8") as outfile:
-        outfile.write("episode_id,score\n")
-
     players = [PPOAgent(enums.Character.FOX, device), NOOP(enums.Character.FOX)]
 
     # normalizer = ObservationNormalizer(s_dim)
