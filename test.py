@@ -6,7 +6,7 @@ import argparse
 import torch
 import numpy as np
 from melee import enums
-from parameters import MAX_STEP
+from parameters import MAX_STEP, STATE_DIM
 
 # from observation_normalizer import ObservationNormalizer
 from melee_env.myenv import MeleeEnv
@@ -46,12 +46,14 @@ def run():
     np.random.seed(500)
 
     # players = [PPOAgent(enums.Character.FOX, device), NOOP(enums.Character.FOX)]
-    # players = [CPU(enums.Character.FOX, 1), NOOP(enums.Character.FOX)]
-    players = [NOOP(enums.Character.FOX), NOOP(enums.Character.FOX)]
+    players = [
+        PPOAgent(enums.Character.FOX, 1, 2, device, STATE_DIM),
+        CPU(enums.Character.FOX, 9)]
+    # players = [NOOP(enums.Character.FOX), NOOP(enums.Character.FOX)]
 
     # normalizer = ObservationNormalizer(s_dim)
-    # players[0].ppo.actor_net = torch.load(args.model_path + "actor_net.pt")
-    # players[0].ppo.critic_net = torch.load(args.model_path + "critic_net.pt")
+    players[0].ppo.actor_net = torch.load(args.model_path + "actor_net.pt")
+    players[0].ppo.critic_net = torch.load(args.model_path + "critic_net.pt")
     # normalizer.load(args.model_path)
 
     for episode_id in range(args.episode_num):
@@ -63,10 +65,10 @@ def run():
         for step_cnt in range(MAX_STEP):
             if step_cnt > 100:
 
-                # action_pair = [0, 0]
-                # a, _ = players[0].act(now_s)
-                # action_pair[0] = a
-                # action_pair[1] = players[1].act()
+                action_pair = [0, 0]
+                a, _ = players[0].act(now_s)
+                action_pair[0] = a
+                action_pair[1] = players[1].act(now_s)
 
                 next_s, r, done, _ = env.step(*action_pair)
                 # next_state = normalizer(next_state)
