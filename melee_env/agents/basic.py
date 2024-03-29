@@ -48,7 +48,7 @@ class CPU(AgentChooseCharacter):
         self.lvl = lvl
 
     def act(self, gamestate):
-        pass
+        return 0
 
 
 class NOOP(AgentChooseCharacter):

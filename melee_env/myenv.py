@@ -133,7 +133,7 @@ class MeleeEnv:
                             costume=i,
                             swag=False,
                             cpu_level=self.players[i].lvl,
-                            start=self.players[i].press_start)  
+                            start=self.players[i].press_start)
             elif self.gamestate.menu_state is melee.Menu.STAGE_SELECT:
                 # time.sleep(0.1)
                 melee.MenuHelper.choose_stage(
