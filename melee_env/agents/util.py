@@ -200,6 +200,7 @@ class ActionSpace:
 
     def __call__(self, action):
         if action > self.size - 1:
+            print(action)
             exit("Error: invalid action!")
 
         return ControlState(self.action_space[action])
