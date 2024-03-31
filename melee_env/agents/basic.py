@@ -6,6 +6,8 @@ from melee_env.agents.util import *
 import code
 from PPO import Ppo
 import torch
+from parameters import TAU
+import random
 
 
 class Agent(ABC):
@@ -171,18 +173,18 @@ class Rest(Agent):
 
 
 class PPOAgent(Agent):
-    def __init__(self, character, agent_id, opponent_id, device, s_dim,
-                 test_mode=False, auto_fire=True):
+    def __init__(self, character, agent_id, opponent_id, device, s_dim, a_dim,
+                 test_mode=False, auto_fire=False):
         super().__init__()
         self.character = character
         self.agent_id = agent_id
         self.opponent_id = opponent_id
 
-        self.s_dim = s_dim     # needs modification
-        self.a_dim = ActionSpace().action_space.shape[0]
+        self.s_dim = s_dim
+        self.a_dim = a_dim
         self.device = device
 
-        self.action_space = ActionSpace()
+        self.action_space = MyActionSpace()
 
         self.action = 0
         self.ppo = Ppo(
@@ -193,38 +195,119 @@ class PPOAgent(Agent):
         self.requested_firefoxing = False
 
     def act(self, s):
-        a, a_prob = self.ppo.choose_action(s, self.test_mode)
+        action_prob_np = self.ppo.choose_action(s)
 
-        if self.auto_fire and s[0].players[self.agent_id].y < -10:
-            p1 = s[0].players[self.agent_id]
-            if p1.action in [
-                enums.Action.SWORD_DANCE_3_MID,
-                enums.Action.SWORD_DANCE_3_LOW,
-                enums.Action.SWORD_DANCE_3_HIGH,
-                enums.Action.SWORD_DANCE_3_LOW_AIR,
-                enums.Action.SWORD_DANCE_3_MID_AIR,
-                enums.Action.SWORD_DANCE_3_HIGH_AIR,
-                enums.Action.SWORD_DANCE_4_MID
-            ]:
-                self.firefoxing = True
-            else:
-                self.firefoxing = False
-            if not self.firefoxing:
-                if self.requested_firefoxing:
-                    self.requested_firefoxing = False
-                    return 0, a_prob
-                else:
-                    self.requested_firefoxing = True
-                    return 19, a_prob
-            else:
-                edge = EDGE_POSITION.get(s[0].stage)
-                if p1.position.x < -edge - 10:
-                    return 2, a_prob
-                elif p1.position.x > edge + 10:
-                    return 8, a_prob
-                else:
-                    return 5, a_prob
+        if self.test_mode:
+            final_weights = self.neglect_invalid_actions(s[0], action_prob_np)
+            a = torch.argmax(final_weights).item()
         else:
-            self.firefoxing = False
+            # print(weights)
+            max_weight = np.max(action_prob_np)
+            exp_weights = np.exp((action_prob_np - max_weight) / TAU)
+            exp_weights = self.neglect_invalid_actions(s[0], exp_weights)
+            final_weights = exp_weights / np.sum(exp_weights)
+            # print(final_weights)
+            a = random.choices(
+                list(range(self.a_dim)), weights=final_weights, k=1)[0]
 
-        return a[0] * 9 + a[1], a_prob
+        # if self.auto_fire and s[0].players[self.agent_id].y < -10:
+        #     p1 = s[0].players[self.agent_id]
+        #     if p1.action in [
+        #         enums.Action.SWORD_DANCE_3_MID,
+        #         enums.Action.SWORD_DANCE_3_LOW,
+        #         enums.Action.SWORD_DANCE_3_HIGH,
+        #         enums.Action.SWORD_DANCE_3_LOW_AIR,
+        #         enums.Action.SWORD_DANCE_3_MID_AIR,
+        #         enums.Action.SWORD_DANCE_3_HIGH_AIR,
+        #         enums.Action.SWORD_DANCE_4_MID
+        #     ]:
+        #         self.firefoxing = True
+        #     else:
+        #         self.firefoxing = False
+        #     if not self.firefoxing:
+        #         if self.requested_firefoxing:
+        #             self.requested_firefoxing = False
+        #             return 0, a_prob
+        #         else:
+        #             self.requested_firefoxing = True
+        #             return 19, a_prob
+        #     else:
+        #         edge = EDGE_POSITION.get(s[0].stage)
+        #         if p1.position.x < -edge - 10:
+        #             return 2, a_prob
+        #         elif p1.position.x > edge + 10:
+        #             return 8, a_prob
+        #         else:
+        #             return 5, a_prob
+        # else:
+        #     self.firefoxing = False
+
+        return a, action_prob_np
+
+    def neglect_invalid_actions(self, s, action_prob_np):
+        p1 = s.players[self.agent_id]
+        if p1.jumps_left == 0:
+            action_prob_np[2:8] = 0.0
+        if p1.action in [
+            enums.Action.SWORD_DANCE_1_AIR,
+            enums.Action.SWORD_DANCE_2_HIGH_AIR,
+            enums.Action.SWORD_DANCE_3_LOW,
+            enums.Action.SWORD_DANCE_3_MID,
+            enums.Action.SWORD_DANCE_3_HIGH,
+            enums.Action.SWORD_DANCE_3_LOW_AIR,
+            enums.Action.SWORD_DANCE_3_MID_AIR,
+            enums.Action.SWORD_DANCE_3_HIGH_AIR,
+            enums.Action.SWORD_DANCE_4_LOW,
+            enums.Action.SWORD_DANCE_4_MID,
+            enums.Action.SWORD_DANCE_4_HIGH,
+        ]:
+            action_prob_np[3] = 0.0
+            action_prob_np[6:27] = 0.0
+        elif p1.action in [
+            enums.Action.GRAB,
+            enums.Action.GRAB_PULL,
+            enums.Action.GRAB_PULLING,
+            enums.Action.GRAB_PULLING_HIGH,
+            enums.Action.GRAB_PUMMEL,
+            enums.Action.GRAB_WAIT
+        ]:
+            action_prob_np[3:8] = 0.0
+            action_prob_np[9:27] = 0.0
+            action_prob_np[28:] = 0.0
+        else:
+            action_prob_np[27:] = 0.0
+        if p1.action in [
+            enums.Action.EDGE_CATCHING,
+            enums.Action.EDGE_HANGING,
+            enums.Action.EDGE_TEETERING,
+            enums.Action.EDGE_TEETERING_START
+        ]:
+            action_prob_np[3] = 0.0
+            action_prob_np[6:8] = 0.0
+            action_prob_np[9:24] = 0.0
+            action_prob_np[26:] = 0.0
+            if p1.facing:
+                action_prob_np[1] = 0.0
+                action_prob_np[25] = 0.0
+            else:
+                action_prob_np[0] = 0.0
+                action_prob_np[24] = 0.0
+        if not p1.on_ground:
+            action_prob_np[3] = 0.0
+            action_prob_np[6:8] = 0.0
+            action_prob_np[13:17] = 0.0
+            action_prob_np[22:26] = 0.0
+        if p1.facing:
+            action_prob_np[14] = 0.0
+        else:
+            action_prob_np[13] = 0.0
+        if p1.action in [
+            enums.Action.LYING_GROUND_DOWN,
+            enums.Action.TECH_MISS_DOWN
+        ]:
+            action_prob_np[0:2] = 0.0
+            action_prob_np[3:8] = 0.0
+            action_prob_np[9:24] = 0.0
+            action_prob_np[26:] = 0.0
+
+        return action_prob_np

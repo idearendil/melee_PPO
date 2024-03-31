@@ -18,8 +18,7 @@ class Actor(nn.Module):
 
         self.fc1 = nn.Linear(s_dim, 256)
         self.fc2 = nn.Linear(256, 128)
-        self.fc3_1 = nn.Linear(128, 5)
-        self.fc3_2 = nn.Linear(128, 9)
+        self.fc3_1 = nn.Linear(128, a_dim)
         self.bn1d_1 = nn.BatchNorm1d(256)
         self.bn1d_2 = nn.BatchNorm1d(128)
         self.a_dim = a_dim
@@ -47,9 +46,9 @@ class Actor(nn.Module):
         s1 = self.bn1d_1(torch.tanh(self.fc1(s1)))
         s1 = self.bn1d_2(torch.tanh(self.fc2(s1)))
 
-        return self.fc3_1(s1), self.fc3_2(s1)
+        return self.fc3_1(s1)
 
-    def choose_action(self, s, test_mode):
+    def choose_action(self, s):
         """
         Choose action by normal distribution
 
@@ -61,40 +60,10 @@ class Actor(nn.Module):
         """
         with torch.no_grad():
             self.eval()
-            action_button_prob_ts, action_stick_prob_ts = self.forward(s)
-            action_button_prob_ts = torch.softmax(action_button_prob_ts, dim=1)
-            action_stick_prob_ts = torch.softmax(action_stick_prob_ts, dim=1)
-            action_button_prob_np = action_button_prob_ts.squeeze().cpu().numpy()
-            action_stick_prob_np = action_stick_prob_ts.squeeze().cpu().numpy()
-
-            if test_mode:
-                a_button = torch.argmax(action_button_prob_np).item()
-                a_stick = torch.argmax(action_stick_prob_np).item()
-            else:
-                a_button = self.boltzmann(list(range(5)), action_button_prob_np)
-                a_stick = self.boltzmann(list(range(9)), action_stick_prob_np)
-        return (a_button, a_stick), (action_button_prob_np, action_stick_prob_np)
-
-    def boltzmann(self, actions, weights):
-        """
-        Boltzmann greedy exploration method.
-
-        :arg actions:
-            tuple of possible actions.
-
-        :arg weights:
-            numpy array(float) of weights for each possible action
-
-        :returns:
-            chosen action among actions
-        """
-        # print(weights)
-        max_weight = np.max(weights)
-        exp_weights = np.exp((weights - max_weight) / TAU)
-        sum_exp_weights = np.sum(exp_weights)
-        final_weights = exp_weights / sum_exp_weights
-        # print(final_weights)
-        return random.choices(actions, weights=final_weights, k=1)[0]
+            action_prob_ts = self.forward(s)
+            action_prob_ts = torch.softmax(action_prob_ts, dim=1)
+            action_prob_np = action_prob_ts.squeeze().cpu().numpy()
+        return action_prob_np
 
 
 class Critic(nn.Module):

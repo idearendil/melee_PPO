@@ -6,7 +6,7 @@ import argparse
 import torch
 import numpy as np
 from melee import enums
-from parameters import MAX_STEP, STATE_DIM
+from parameters import MAX_STEP, STATE_DIM, ACTION_DIM
 
 # from observation_normalizer import ObservationNormalizer
 from melee_env.myenv import MeleeEnv
@@ -47,8 +47,8 @@ def run():
 
     # players = [PPOAgent(enums.Character.FOX, device), NOOP(enums.Character.FOX)]
     players = [
-        PPOAgent(enums.Character.FOX, 1, 2, device, STATE_DIM),
-        CPU(enums.Character.FOX, 9)]
+        PPOAgent(enums.Character.FOX, 1, 2, device, STATE_DIM, ACTION_DIM),
+        CPU(enums.Character.FOX, 1)]
     # players = [NOOP(enums.Character.FOX), NOOP(enums.Character.FOX)]
 
     # normalizer = ObservationNormalizer(s_dim)
@@ -61,17 +61,27 @@ def run():
 
         env = MeleeEnv(args.iso, players, fast_forward=True)
         env.start()
-        now_s, _ = env.reset(enums.Stage.BATTLEFIELD)
+        now_s, _ = env.reset(enums.Stage.FINAL_DESTINATION)
+
+        action_q = []
+        action_q_idx = 0
+        action_pair = [0, 0]
         for step_cnt in range(MAX_STEP):
             if step_cnt > 100:
 
-                action_pair = [0, 0]
-                a, _ = players[0].act(now_s)
-                action_pair[0] = a
-                action_pair[1] = players[1].act(now_s)
+                if action_q_idx >= len(action_q):
+                    action_q_idx = 0
+                    a, _ = players[0].act(now_s)
+                    action_q = players[0].action_space.high_action_space[a]
+
+                action_pair[0] = action_q[action_q_idx]
+                action_pair[1] = players[1].act(now_s[0])
+                action_q_idx += 1
 
                 next_s, r, done, _ = env.step(*action_pair)
                 # next_state = normalizer(next_state)
+
+                print(r)
 
                 score += r
                 now_s = next_s

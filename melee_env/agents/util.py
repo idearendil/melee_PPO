@@ -1,6 +1,8 @@
 import numpy as np
 import melee
+from melee.enums import Action
 from collections import deque
+from parameters import ACTION_DIM
 
 
 class ObservationSpace:
@@ -40,7 +42,6 @@ class ObservationSpace:
             p2_stock_loss = int(self.previous_gamestate.players[2].stock) - int(
                 self.current_gamestate.players[2].stock
             )
-            p1_off_stage = gamestate.players[1].off_stage * 1.0
 
             p1_dmg = max(p1_dmg, 0)
             p2_dmg = max(p2_dmg, 0)
@@ -51,16 +52,14 @@ class ObservationSpace:
             p1_stock_loss = max(p1_stock_loss, 0)
             p2_stock_loss = max(p2_stock_loss, 0)
 
-            w_dmg, w_shield, w_stock, w_off_stage = 0.1, 0.02, 10, 0.2
+            w_dmg, w_shield, w_stock = 0.1, 0.02, 10
             p1_loss = (
                 w_dmg * p1_dmg
                 + w_shield * p1_shield_dmg
                 + w_stock * p1_stock_loss
-                + w_off_stage * p1_off_stage)
+            )
             p2_loss = (
-                w_dmg * p2_dmg
-                + w_shield * p2_shield_dmg
-                + w_stock * p2_stock_loss
+                w_dmg * p2_dmg + w_shield * p2_shield_dmg + w_stock * p2_stock_loss
             )
 
             reward = p2_loss - p1_loss
@@ -194,6 +193,179 @@ class ActionSpace:
         # 45  [-0.70710678,  0.70710678,  4.        ]
 
         self.size = self.action_space.shape[0]
+
+    def sample(self):
+        return np.random.choice(self.size)
+
+    def __call__(self, action):
+        if action > self.size - 1:
+            print(action)
+            exit("Error: invalid action!")
+
+        return ControlState(self.action_space[action])
+
+
+class MyActionSpace:
+    def __init__(self):
+
+        mid = np.sqrt(2) / 2
+        self.action_space = np.array(
+            [
+                [0, 0, 0],  # 0
+                [1, 0, 0],  # 1
+                [-1, 0, 0],  # 2
+                [0, 1, 0],  # 3
+                [0, -1, 0],  # 4
+                [mid, mid, 0],  # 5
+                [-mid, mid, 0],  # 6
+                [mid, -mid, 0],  # 7
+                [-mid, -mid, 0],  # 8
+                [0, 0, 1],  # 9
+                [1, 0, 1],  # 10
+                [-1, 0, 1],  # 11
+                [0, 1, 1],  # 12
+                [0, -1, 1],  # 13
+                [0.3, 0, 1],  # 14
+                [-0.3, 0, 1],  # 15
+                [0, 0.3, 1],  # 16
+                [0, -0.3, 1],  # 17
+                [0, 0, 2],  # 18
+                [1, 0, 2],  # 19
+                [-1, 0, 2],  # 20
+                [0, 1, 2],  # 21
+                [0, -1, 2],  # 22
+                [0, 0, 3],  # 23
+                [0, 0, 4],  # 24
+                [1, 0, 4],  # 25
+                [-1, 0, 4],  # 26
+                [0, -1, 4],  # 27
+            ],
+            dtype=np.float32,
+        )
+        self.size = self.action_space.shape[0]
+
+        self.high_action_space = [
+            [1, 1],  # 0
+            [2, 2],  # 1
+            [3, 3],  # 2
+            [3, 3, 3, 0],  # 3
+            [5, 5],  # 4
+            [6, 6],  # 5
+            [5, 5, 5, 0],  # 6
+            [6, 6, 6, 0],  # 7
+            [9, 0],  # 8
+            [10, 0],  # 9
+            [11, 0],  # 10
+            [12, 0],  # 11
+            [13, 0],  # 12
+            [14, 0],  # 13
+            [15, 0],  # 14
+            [16, 0],  # 15
+            [17, 0],  # 16
+            [18, 0],  # 17
+            [19, 0],  # 18
+            [20, 0],  # 19
+            [21, 0, 0],  # 20
+            [22, 0],  # 21
+            [23, 0],  # 22
+            [24, 0],  # 23
+            [0, 25, 25, 0],  # 24
+            [0, 26, 26, 0],  # 25
+            [27, 0],  # 26
+            [4, 4],  # 27
+            [7, 7],  # 28
+            [8, 8],  # 29
+        ]
+
+        self.sensor = {
+            Action.DASHING: [0, 1],
+            Action.TURNING: [0, 1],
+            Action.JUMPING_FORWARD: [2, 3, 4, 5, 6, 7],
+            Action.JUMPING_ARIAL_FORWARD: [2, 3, 4, 5, 6, 7],
+            Action.JUMPING_BACKWARD: [4, 5, 6, 7],
+            Action.JUMPING_ARIAL_BACKWARD: [4, 5, 6, 7],
+            Action.NEUTRAL_ATTACK_1: [8],
+            Action.NEUTRAL_ATTACK_2: [8],
+            Action.LOOPING_ATTACK_START: [8],
+            Action.LOOPING_ATTACK_MIDDLE: [8],
+            Action.LOOPING_ATTACK_END: [8],
+            Action.NAIR: [8],
+            Action.NAIR_LANDING: [8],
+            Action.DASH_ATTACK: [8],
+            Action.FSMASH_MID: [9, 10],
+            Action.FAIR: [9, 10],
+            Action.FAIR_LANDING: [9, 10],
+            Action.BAIR: [9, 10],
+            Action.BAIR_LANDING: [9, 10],
+            Action.UPSMASH: [11],
+            Action.UAIR: [11, 2],
+            Action.UAIR_LANDING: [11, 2],
+            Action.DOWNSMASH: [12],
+            Action.DAIR: [12],
+            Action.DAIR_LANDING: [12],
+            Action.FTILT_MID: [13, 14],
+            Action.UPTILT: [15],
+            Action.DOWNTILT: [16],
+            Action.CROUCH_END: [16],
+            Action.LASER_GUN_PULL: [17],
+            Action.NEUTRAL_B_CHARGING: [17],
+            Action.NEUTRAL_B_ATTACKING: [17],
+            Action.NEUTRAL_B_FULL_CHARGE: [17],
+            Action.WAIT_ITEM: [17],
+            Action.NEUTRAL_B_CHARGING_AIR: [17],
+            Action.NEUTRAL_B_ATTACKING_AIR: [18, 19],
+            Action.NEUTRAL_B_FULL_CHARGE_AIR: [18, 19],
+            Action.SWORD_DANCE_1: [18, 19],
+            Action.SWORD_DANCE_2_HIGH: [18, 19],
+            Action.SWORD_DANCE_2_MID: [18, 19],
+            Action.SWORD_DANCE_3_HIGH: [18, 19, 20],
+            Action.LANDING_SPECIAL: [18, 19],
+            Action.SWORD_DANCE_1_AIR: [20],
+            Action.SWORD_DANCE_2_HIGH_AIR: [20],
+            Action.SWORD_DANCE_3_LOW: [20],
+            Action.SWORD_DANCE_3_MID: [20],
+            Action.SWORD_DANCE_3_LOW_AIR: [20, 21],
+            Action.SWORD_DANCE_3_MID_AIR: [20],
+            Action.SWORD_DANCE_3_HIGH_AIR: [20],
+            Action.SWORD_DANCE_4_LOW: [0, 1, 2, 4, 5, 27, 28, 29],
+            Action.SWORD_DANCE_4_MID: [0, 1, 2, 4, 5, 27, 28, 29],
+            Action.SWORD_DANCE_4_HIGH: [0, 1, 2, 4, 5, 27, 28, 29],
+            Action.DOWN_B_GROUND_START: [21],
+            Action.DOWN_B_GROUND: [21],
+            Action.DOWN_B_STUN: [21],
+            Action.DOWN_B_AIR: [21],
+            Action.SHINE_RELEASE_AIR: [21],
+            Action.GRAB: [22],
+            Action.GRAB_PULLING: [22],
+            Action.GRAB_WAIT: [22],
+            Action.GRAB_BREAK: [22],
+            Action.GRAB_RUNNING: [22],
+            Action.GRAB_PUMMEL: [8],
+            Action.THROW_FORWARD: [0, 1],
+            Action.THROW_BACK: [0, 1],
+            Action.THROW_UP: [2],
+            Action.THROW_DOWN: [27],
+            Action.SHIELD_START: [23, 24, 25],
+            Action.SHIELD_STUN: [23],
+            Action.SHIELD_RELEASE: [23],
+            Action.ROLL_FORWARD: [24, 25],
+            Action.ROLL_BACKWARD: [24, 25],
+            Action.SPOTDODGE: [26],
+            Action.EDGE_JUMP_1_QUICK: [2, 4, 5],
+            Action.EDGE_JUMP_2_QUICK: [2, 4, 5],
+            Action.EDGE_JUMP_1_SLOW: [2, 4, 5],
+            Action.EDGE_JUMP_2_SLOW: [2, 4, 5],
+            Action.EDGE_ATTACK_QUICK: [8],
+            Action.EDGE_ATTACK_SLOW: [8],
+            Action.EDGE_GETUP_QUICK: [0, 1],
+            Action.EDGE_GETUP_SLOW: [0, 1],
+            Action.EDGE_ROLL_QUICK: [24, 25],
+            Action.EDGE_ROLL_SLOW: [24, 25],
+            Action.GETUP_ATTACK: [8],
+            Action.NEUTRAL_GETUP: [2],
+            Action.GROUND_ROLL_BACKWARD_DOWN: [24, 25],
+            Action.GROUND_ROLL_FORWARD_DOWN: [24, 25]
+        }
 
     def sample(self):
         return np.random.choice(self.size)

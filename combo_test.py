@@ -21,9 +21,9 @@ env.start()
 
 # action_buffer = deque(maxlen=3)
 # action_sequence = [1] + [0] * 10 + [19] + [0] * 40 + [4]
-action_sequence = [3] + [0] * 50 + [19] + [0] * 40 + [3] + [0] * 50 + [43]
-# action_sequence = [7] * 3 + [0] * 22 + [3] * 100
-action_sequence2 = [0]
+# action_sequence = [3] + [0] * 50 + [19] + [0] * 40 + [3] + [0] * 50 + [43]
+action_sequence = [1, 1]
+action_sequence2 = [19] + [0] * 40 + [7]
 if len(action_sequence) > len(action_sequence2):
     action_sequence2.extend([0] * (len(action_sequence) - len(action_sequence2)))
 else:
@@ -50,7 +50,7 @@ for step_cnt in range(300):
             "/ action frame:",
             next_obs[0].players[1].action_frame,
         )
-        print("player y: ", next_obs[0].players[1].y)
+        print("player x: ", next_obs[0].players[1].x)
     else:
         action_pair = [0, 0]
         next_obs, r, done, _ = env.step(*action_pair)

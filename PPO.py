@@ -37,11 +37,11 @@ class Ppo:
         self.actor_net.to(device)
         self.critic_net.to(device)
 
-    def choose_action(self, s, test_mode):
+    def choose_action(self, s):
         s_ts1, s_ts2 = self.state_preprocessor(s)
         s_ts1 = torch.from_numpy(s_ts1).unsqueeze(0).to(self.device)
         s_ts2 = torch.from_numpy(s_ts2).unsqueeze(0).to(self.device)
-        return self.actor_net.choose_action((s_ts1, s_ts2), test_mode)
+        return self.actor_net.choose_action((s_ts1, s_ts2))
 
     def push_an_episode(self, data):
         """
@@ -57,10 +57,10 @@ class Ppo:
             [], [], [], [], []
         for s, a, r, mask, prob in data:
             s_lst.append(s)
-            a_lst.append((a // 9, a % 9))
+            a_lst.append(a)
             r_lst.append(r)
             mask_lst.append(mask)
-            prob_lst.append((torch.Tensor(prob[0]), torch.Tensor(prob[1])))
+            prob_lst.append((torch.Tensor(prob)))
 
         s_lst1 = []
         s_lst2 = []
@@ -87,15 +87,11 @@ class Ppo:
             ret_ts, adv_ts = self.get_gae(r_ts, masks, v_ts)
 
         for idx, _ in enumerate(s_ts1):
-            if idx+DELAY >= len(s_ts1):
-                break
             self.buffer.push((s_lst[idx],
-                              a_lst[idx][0],
-                              a_lst[idx][1],
-                              adv_ts[idx+DELAY].item(),
+                              a_lst[idx],
+                              adv_ts[idx].item(),
                               ret_ts[idx].item(),
-                              prob_lst[idx][0],
-                              prob_lst[idx][1]))
+                              prob_lst[idx]))
 
     def train(self):
         """
@@ -108,7 +104,7 @@ class Ppo:
         critic_loss_lst, actor_loss_lst = [], []
         for batch_id in range(BATCH_NUM):
 
-            s_lst, a_lst1, a_lst2, adv_lst, ret_lst, op_lst1, op_lst2 = \
+            s_lst, a_lst, adv_lst, ret_lst, op_lst = \
                 self.buffer.pull(BATCH_SIZE)
 
             s_lst1 = []
@@ -120,14 +116,12 @@ class Ppo:
 
             st_ts1 = torch.Tensor(np.stack(s_lst1, axis=0)).to(self.device)
             st_ts2 = torch.Tensor(np.stack(s_lst2, axis=0)).to(self.device)
-            a_ts1 = torch.LongTensor(a_lst1).to(self.device).unsqueeze(1)
-            a_ts2 = torch.LongTensor(a_lst2).to(self.device).unsqueeze(1)
+            a_ts = torch.LongTensor(a_lst).to(self.device).unsqueeze(1)
             adv_ts = torch.Tensor(np.array(
                 adv_lst, dtype=np.float32)).unsqueeze(1).to(self.device)
             ret_ts = torch.Tensor(np.array(
                 ret_lst, dtype=np.float32)).unsqueeze(1).to(self.device)
-            op_ts1 = torch.Tensor(np.stack(op_lst1, axis=0)).to(self.device)
-            op_ts2 = torch.Tensor(np.stack(op_lst2, axis=0)).to(self.device)
+            op_ts = torch.Tensor(np.stack(op_lst, axis=0)).to(self.device)
 
             v_ts = self.critic_net((st_ts1, st_ts2))
             critic_loss = self.critic_loss_func(v_ts, ret_ts)
@@ -136,28 +130,19 @@ class Ppo:
             self.critic_optim.step()
 
             new_probs_ts = self.actor_net((st_ts1, st_ts2))
-            np_ts1 = torch.softmax(new_probs_ts[0], dim=1)
-            np_ts2 = torch.softmax(new_probs_ts[1], dim=1)
+            np_ts = torch.softmax(new_probs_ts, dim=1)
 
-            entropy_loss = Categorical(np_ts1).entropy().mean()
-            entropy_loss += Categorical(np_ts2).entropy().mean()
-            op_ts1 = op_ts1.gather(1, a_ts1)
-            op_ts2 = op_ts2.gather(1, a_ts2)
-            np_ts1 = np_ts1.gather(1, a_ts1)
-            np_ts2 = np_ts2.gather(1, a_ts2)
+            entropy_loss = Categorical(np_ts).entropy().mean()
+            op_ts = op_ts.gather(1, a_ts)
+            np_ts = np_ts.gather(1, a_ts)
 
-            ratio1 = torch.exp(torch.log(np_ts1) - torch.log(op_ts1))
-            surrogate_loss1 = ratio1 * adv_ts
-            ratio2 = torch.exp(torch.log(np_ts2) - torch.log(op_ts2))
-            surrogate_loss2 = ratio2 * adv_ts
+            ratio = torch.exp(torch.log(np_ts) - torch.log(op_ts))
+            surrogate_loss = ratio * adv_ts
 
-            ratio1 = torch.clamp(ratio1, 1.0 - EPSILON, 1.0 + EPSILON)
-            clipped_loss1 = ratio1 * adv_ts
-            ratio2 = torch.clamp(ratio2, 1.0 - EPSILON, 1.0 + EPSILON)
-            clipped_loss2 = ratio2 * adv_ts
+            ratio = torch.clamp(ratio, 1.0 - EPSILON, 1.0 + EPSILON)
+            clipped_loss = ratio * adv_ts
 
-            actor_loss = -torch.min(surrogate_loss1, clipped_loss1).mean()
-            actor_loss -= torch.min(surrogate_loss2, clipped_loss2).mean()
+            actor_loss = -torch.min(surrogate_loss, clipped_loss).mean()
             actor_loss -= ENTROPY_WEIGHT * entropy_loss
             self.actor_optim.zero_grad()
             actor_loss.backward()
@@ -165,7 +150,7 @@ class Ppo:
 
             actor_loss_lst.append(actor_loss.item())
             critic_loss_lst.append(critic_loss.item())
-            if batch_id % 2 == 0:
+            if batch_id % 1 == 0:
                 print(
                     f'critic loss: {sum(critic_loss_lst)/len(critic_loss_lst):.8f}',
                     f'\t\tactor loss: {sum(actor_loss_lst)/len(actor_loss_lst):.8f}')
@@ -257,11 +242,11 @@ class Ppo:
         state1[32] = p1.action_frame
         state1[33] = p2.action_frame
 
-        for i in range(5):
-            button = previous_actions[i, self.agent_id-1] // 9
-            stick = previous_actions[i, self.agent_id-1] % 9
-            state1[33 + i*14 + button] = 1.0
-            state1[33 + i*14 + 5 + stick] = 1.0
+        # for i in range(5):
+        #     button = previous_actions[i, self.agent_id-1] // 9
+        #     stick = previous_actions[i, self.agent_id-1] % 9
+        #     state1[33 + i*14 + button] = 1.0
+        #     state1[33 + i*14 + 5 + stick] = 1.0
 
         state2 = np.zeros((1,), dtype=np.float32)
 
