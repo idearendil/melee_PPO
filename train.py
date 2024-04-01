@@ -92,7 +92,7 @@ useless_animations = [
     enums.Action.EDGE_TEETERING,
     enums.Action.EDGE_TEETERING_START,
 
-      # 연구 필요
+    # 조사 필요
     enums.Action.GRAB_RUNNING_PULLING,
     enums.Action.PLATFORM_DROP,
     enums.Action.WALK_MIDDLE,
@@ -265,7 +265,7 @@ def run():
                       "w",
                       encoding="utf-8") as outfile:
                 for a_action in no_sensor:
-                    outfile.write(str(a_action.value))
+                    outfile.write(str(a_action.value)+'\n')
 
         score_avg = np.mean(scores)
         print("cycle: ", cycle_id,
