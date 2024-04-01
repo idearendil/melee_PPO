@@ -56,57 +56,43 @@ def run():
     players[0].ppo.critic_net = torch.load(args.model_path + "critic_net.pt")
     # normalizer.load(args.model_path)
 
-    win_rate = [0] * 9
-    lose_rate = [0] * 9
+    for episode_id in range(args.episode_num):
+        score = 0
 
-    for diff in range(1, 10):
+        env = MeleeEnv(args.iso, players, fast_forward=True)
+        env.start()
+        now_s, _ = env.reset(enums.Stage.FINAL_DESTINATION)
 
-        players[1] = CPU(enums.Character.FOX, diff)
+        action_q = []
+        action_q_idx = 0
+        action_pair = [0, 0]
+        for step_cnt in range(MAX_STEP):
+            if step_cnt > 100:
 
-        for episode_id in range(args.episode_num):
-            score = 0
+                if action_q_idx >= len(action_q):
+                    action_q_idx = 0
+                    a, _ = players[0].act(now_s)
+                    action_q = players[0].action_space.high_action_space[a]
 
-            env = MeleeEnv(args.iso, players, fast_forward=True)
-            env.start()
-            now_s, _ = env.reset(enums.Stage.FINAL_DESTINATION)
+                action_pair[0] = action_q[action_q_idx]
+                action_pair[1] = players[1].act(now_s[0])
+                action_q_idx += 1
 
-            action_q = []
-            action_q_idx = 0
-            action_pair = [0, 0]
-            for step_cnt in range(MAX_STEP):
-                if step_cnt > 100:
+                next_s, r, done, _ = env.step(*action_pair)
+                # next_state = normalizer(next_state)
 
-                    if action_q_idx >= len(action_q):
-                        action_q_idx = 0
-                        a, _ = players[0].act(now_s)
-                        action_q = players[0].action_space.high_action_space[a]
+                score += r
+                now_s = next_s
 
-                    action_pair[0] = action_q[action_q_idx]
-                    action_pair[1] = players[1].act(now_s[0])
-                    action_q_idx += 1
+                if done:
+                    break
+            else:
+                action_pair = [0, 0]
+                now_s, _, _, _ = env.step(*action_pair)
 
-                    next_s, r, done, _ = env.step(*action_pair)
-                    # next_state = normalizer(next_state)
+        env.close()
 
-                    score += r
-                    now_s = next_s
-
-                    if done:
-                        if next_s[0].players[1].stock < next_s[0].players[2].stock:
-                            lose_rate[diff-1] += 1
-                        elif next_s[0].players[1].stock > next_s[0].players[2].stock:
-                            win_rate[diff-1] += 1
-                        break
-                else:
-                    action_pair = [0, 0]
-                    now_s, _, _, _ = env.step(*action_pair)
-
-            env.close()
-
-            print("episode: ", episode_id, "\tscore: ", score)
-
-    print(lose_rate)
-    print(win_rate)
+        print("episode: ", episode_id, "\tscore: ", score)
 
 if __name__ == "__main__":
     run()
