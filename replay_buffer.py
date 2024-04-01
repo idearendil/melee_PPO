@@ -10,7 +10,7 @@ class ReplayBuffer():
     """
     Class of replay buffer.
     This replay buffer includes functions such as push and pull.
-    Each data = state, action, return, advant.
+    Each data = state, action, advant, return, action_prob.
     """
     def __init__(self, max_size):
         self.buffer = deque(maxlen=max_size)
@@ -20,7 +20,8 @@ class ReplayBuffer():
         Push one set of data into buffer.
 
         :arg data:
-            data should be a tuple of state, action, return, advant.
+            data should be a tuple of \
+                state, action, advant, return, action_prob.
         """
         self.buffer.append(data)
 
@@ -32,7 +33,8 @@ class ReplayBuffer():
             The size of data which will be pulled from buffer.
 
         :return:
-            A tuple which consists of lists of state, action, return, advant.
+            A tuple which consists of lists of \
+                state, action, advant, return, action_prob.
         """
         minibatch = random.sample(self.buffer, data_size)
         s_lst, a_lst, adv_lst, ret_lst, op_lst = \

@@ -38,6 +38,10 @@ class Ppo:
         self.critic_net.to(device)
 
     def choose_action(self, s):
+        """
+        Convert state to preprocessed tensor,
+        and then return action probability by actor_net
+        """
         s_ts1, s_ts2 = self.state_preprocessor(s)
         s_ts1 = torch.from_numpy(s_ts1).unsqueeze(0).to(self.device)
         s_ts2 = torch.from_numpy(s_ts2).unsqueeze(0).to(self.device)
@@ -48,7 +52,7 @@ class Ppo:
         Push an episode to replay buffer.
 
         Args:
-            data: an array of (state, action, reward, mask).
+            data: an array of (state, action, reward, mask, action_prob)
         Returns:
             None
         """
@@ -95,7 +99,7 @@ class Ppo:
 
     def train(self):
         """
-        Train Actor network and Value network with data in buffer.
+        Train Actor network and Critic network with data in buffer.
         """
         print('buffer size: ', self.buffer.size())
 
@@ -156,20 +160,6 @@ class Ppo:
                     f'\t\tactor loss: {sum(actor_loss_lst)/len(actor_loss_lst):.8f}')
                 actor_loss_lst.clear()
                 critic_loss_lst.clear()
-
-    def kl_divergence(self, old_mu, old_sigma, mu, sigma):
-        """
-        KL divergence of two different normal distributions.
-        """
-        old_mu = old_mu.detach()
-        old_sigma = old_sigma.detach()
-        kl = (
-            torch.log(old_sigma)
-            - torch.log(sigma)
-            + (old_sigma.pow(2) + (old_mu - mu).pow(2)) / (2.0 * sigma.pow(2))
-            - 0.5
-        )
-        return kl.sum(1, keepdim=True)
 
     def get_gae(self, rewards, masks, values):
         """
@@ -241,16 +231,10 @@ class Ppo:
         state1[31] = p2.speed_y_self
         state1[32] = p1.action_frame
         state1[33] = p2.action_frame
-        if p1.action.value < 390:
-            state1[34 + p1.action.value // 10] = 1.0
-        if p2.action.value < 390:
-            state1[34 + 39 + p2.action.value // 10] = 1.0
-
-        # for i in range(5):
-        #     button = previous_actions[i, self.agent_id-1] // 9
-        #     stick = previous_actions[i, self.agent_id-1] % 9
-        #     state1[33 + i*14 + button] = 1.0
-        #     state1[33 + i*14 + 5 + stick] = 1.0
+        if p1.action.value < 386:
+            state1[34 + p1.action.value] = 1.0
+        if p2.action.value < 386:
+            state1[34 + 386 + p2.action.value] = 1.0
 
         state2 = np.zeros((1,), dtype=np.float32)
 

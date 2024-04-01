@@ -173,6 +173,9 @@ class Rest(Agent):
 
 
 class PPOAgent(Agent):
+    """
+    An agent using PPO algorithm.
+    """
     def __init__(self, character, agent_id, opponent_id, device, s_dim, a_dim,
                  test_mode=False, auto_fire=False):
         super().__init__()
@@ -190,23 +193,26 @@ class PPOAgent(Agent):
         self.ppo = Ppo(
             self.s_dim, self.a_dim, self.agent_id, self.opponent_id, self.device)
         self.test_mode = test_mode
-        self.auto_fire = auto_fire
-        self.firefoxing = False
-        self.requested_firefoxing = False
+
+        # Following annotations are for auto firefoxing(not yet implemented!).
+
+        # self.auto_fire = auto_fire
+        # self.firefoxing = False
+        # self.requested_firefoxing = False
 
     def act(self, s):
         action_prob_np = self.ppo.choose_action(s)
 
         if self.test_mode:
+            # choose the most probable action
             final_weights = self.neglect_invalid_actions(s[0], action_prob_np)
             a = torch.argmax(final_weights).item()
         else:
-            # print(weights)
+            # choose an action with probability weights
             max_weight = np.max(action_prob_np)
             exp_weights = np.exp((action_prob_np - max_weight) / TAU)
             exp_weights = self.neglect_invalid_actions(s[0], exp_weights)
             final_weights = exp_weights / np.sum(exp_weights)
-            # print(final_weights)
             a = random.choices(
                 list(range(self.a_dim)), weights=final_weights, k=1)[0]
 
@@ -245,8 +251,12 @@ class PPOAgent(Agent):
         return a, action_prob_np
 
     def neglect_invalid_actions(self, s, action_prob_np):
+        """
+        Prevent invalid/unsafe actions
+        """
         p1 = s.players[self.agent_id]
         if p1.jumps_left == 0:
+            # if already double-jumped, prevent jumping
             action_prob_np[2:8] = 0.0
         if p1.action in [
             enums.Action.SWORD_DANCE_1_AIR,
@@ -261,13 +271,16 @@ class PPOAgent(Agent):
             enums.Action.SWORD_DANCE_4_MID,
             enums.Action.SWORD_DANCE_4_HIGH,
         ]:
+            # if currently firefoxing, only tilting stick possible
             action_prob_np[3] = 0.0
             action_prob_np[6:27] = 0.0
             if p1.position.x > 0:
+                # prevent suicide
                 action_prob_np[0] = 0.0
                 action_prob_np[4] = 0.0
                 action_prob_np[28] = 0.0
             if p1.position.x < 0:
+                # prevent suicide
                 action_prob_np[1] = 0.0
                 action_prob_np[5] = 0.0
                 action_prob_np[29] = 0.0
@@ -279,10 +292,13 @@ class PPOAgent(Agent):
             enums.Action.GRAB_PUMMEL,
             enums.Action.GRAB_WAIT
         ]:
+            # if grabbing opponent, only hitting or throwing possible
             action_prob_np[3:8] = 0.0
             action_prob_np[9:27] = 0.0
             action_prob_np[28:] = 0.0
         else:
+            # if currently not firefoxing or grabbing,
+            # some tilting actions are useless
             action_prob_np[27:] = 0.0
         if p1.action in [
             enums.Action.EDGE_CATCHING,
@@ -290,36 +306,47 @@ class PPOAgent(Agent):
             enums.Action.EDGE_TEETERING,
             enums.Action.EDGE_TEETERING_START
         ]:
+            # if grabbing edge now,
+            # only jumping / rolling / moving possible
             action_prob_np[3] = 0.0
             action_prob_np[6:8] = 0.0
             action_prob_np[9:24] = 0.0
             action_prob_np[26:] = 0.0
             if p1.facing:
+                # prevent suicide
                 action_prob_np[1] = 0.0
                 action_prob_np[25] = 0.0
             else:
+                # prevent suicide
                 action_prob_np[0] = 0.0
                 action_prob_np[24] = 0.0
         if not p1.on_ground:
+            # prevent impossible actions when in the air
             action_prob_np[3] = 0.0
             action_prob_np[6:8] = 0.0
             action_prob_np[13:17] = 0.0
             action_prob_np[22:26] = 0.0
         if p1.facing:
+            # weak jab only possible in facing direction
             action_prob_np[14] = 0.0
         else:
+            # weak jab only possible in facing direction
             action_prob_np[13] = 0.0
         if p1.action in [
             enums.Action.LYING_GROUND_DOWN,
             enums.Action.TECH_MISS_DOWN
         ]:
+            # when lying down,
+            # only jumping / jab / rolling possible
             action_prob_np[0:2] = 0.0
             action_prob_np[3:8] = 0.0
             action_prob_np[9:24] = 0.0
             action_prob_np[26:] = 0.0
         if p1.position.x > 0:
+            # prevent suicide
             action_prob_np[18] = 0.0
         if p1.position.x < 0:
+            # prevent suicide
             action_prob_np[19] = 0.0
 
         return action_prob_np
