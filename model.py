@@ -15,22 +15,14 @@ class Actor(nn.Module):
     """
     def __init__(self, s_dim, a_dim):
         super(Actor, self).__init__()
-
         self.fc1 = nn.Linear(s_dim, 256)
-        self.fc2 = nn.Linear(256, 128)
-        self.fc3_1 = nn.Linear(128, a_dim)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc3 = nn.Linear(256, 128)
+        self.fc4 = nn.Linear(128, a_dim)
         self.bn1d_1 = nn.BatchNorm1d(256)
-        self.bn1d_2 = nn.BatchNorm1d(128)
+        self.bn1d_2 = nn.BatchNorm1d(256)
+        self.bn1d_3 = nn.BatchNorm1d(128)
         self.a_dim = a_dim
-        # self.set_init([self.fc1, self.fc2, self.fc2])
-
-    def set_init(self, layers):
-        """
-        Weight initialization method
-        """
-        for layer in layers:
-            nn.init.normal_(layer.weight, mean=0., std=0.1)
-            nn.init.constant_(layer.bias, 0.)
 
     def forward(self, s):
         """
@@ -45,8 +37,8 @@ class Actor(nn.Module):
 
         s1 = self.bn1d_1(torch.tanh(self.fc1(s1)))
         s1 = self.bn1d_2(torch.tanh(self.fc2(s1)))
-
-        return self.fc3_1(s1)
+        s1 = self.bn1d_3(torch.tanh(self.fc3(s1)))
+        return self.fc4(s1)
 
     def choose_action(self, s):
         """
@@ -72,21 +64,13 @@ class Critic(nn.Module):
     """
     def __init__(self, s_dim):
         super(Critic, self).__init__()
-
         self.fc1 = nn.Linear(s_dim, 256)
-        self.fc2 = nn.Linear(256, 128)
-        self.fc3 = nn.Linear(128, 1)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc3 = nn.Linear(256, 128)
+        self.fc4 = nn.Linear(128, 1)
         self.bn1d_1 = nn.BatchNorm1d(256)
-        self.bn1d_2 = nn.BatchNorm1d(128)
-        # self.set_init([self.fc1, self.fc2, self.fc2])
-
-    def set_init(self, layers):
-        """
-        Weight initialization method(but not used now)
-        """
-        for layer in layers:
-            nn.init.normal_(layer.weight, mean=0., std=0.1)
-            nn.init.constant_(layer.bias, 0.)
+        self.bn1d_2 = nn.BatchNorm1d(256)
+        self.bn1d_3 = nn.BatchNorm1d(128)
 
     def forward(self, s):
         """
@@ -101,5 +85,5 @@ class Critic(nn.Module):
 
         s1 = self.bn1d_1(torch.tanh(self.fc1(s1)))
         s1 = self.bn1d_2(torch.tanh(self.fc2(s1)))
-
-        return self.fc3(s1)
+        s1 = self.bn1d_3(torch.tanh(self.fc3(s1)))
+        return self.fc4(s1)

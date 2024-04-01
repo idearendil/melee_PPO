@@ -159,6 +159,8 @@ def run():
             outfile.write("episode_id,score\n")
     episode_id = 0
 
+    no_sensor = []
+
     for cycle_id in range(CYCLE_NUM):
         scores = []
         players[0].ppo.buffer.buffer.clear()  # off-policy? on-policy?
@@ -236,7 +238,9 @@ def run():
                                     break
                     else:
                         if p1_action not in useless_animations:
-                            print('There\'s no sensor on:', p1_action)
+                            if p1_action not in no_sensor:
+                                print('There\'s no sensor on:', p1_action)
+                                no_sensor.append(p1_action)
                     r_sum += r
                     mask_sum *= mask
                 else:
@@ -256,6 +260,13 @@ def run():
             ) as outfile:
                 outfile.write(str(episode_id) + "," + str(score) + "\n")
             scores.append(score)
+
+            with open("no_sensor.txt",
+                      "w",
+                      encoding="utf-8") as outfile:
+                for a_action in no_sensor:
+                    outfile.write(str(a_action.value))
+
         score_avg = np.mean(scores)
         print("cycle: ", cycle_id,
               "\tepisode: ", episode_id,

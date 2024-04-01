@@ -263,6 +263,14 @@ class PPOAgent(Agent):
         ]:
             action_prob_np[3] = 0.0
             action_prob_np[6:27] = 0.0
+            if p1.position.x > 0:
+                action_prob_np[0] = 0.0
+                action_prob_np[4] = 0.0
+                action_prob_np[28] = 0.0
+            if p1.position.x < 0:
+                action_prob_np[1] = 0.0
+                action_prob_np[5] = 0.0
+                action_prob_np[29] = 0.0
         elif p1.action in [
             enums.Action.GRAB,
             enums.Action.GRAB_PULL,
@@ -309,5 +317,9 @@ class PPOAgent(Agent):
             action_prob_np[3:8] = 0.0
             action_prob_np[9:24] = 0.0
             action_prob_np[26:] = 0.0
+        if p1.position.x > 0:
+            action_prob_np[18] = 0.0
+        if p1.position.x < 0:
+            action_prob_np[19] = 0.0
 
         return action_prob_np

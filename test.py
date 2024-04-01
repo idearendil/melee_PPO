@@ -21,7 +21,7 @@ parser.add_argument(
     "--model_path", type=str, default="./models/", help="where models are saved"
 )
 parser.add_argument(
-    "--episode_num", type=int, default=100, help="How many times to test"
+    "--episode_num", type=int, default=10, help="How many times to test"
 )
 parser.add_argument(
     "--iso",
@@ -48,7 +48,7 @@ def run():
     # players = [PPOAgent(enums.Character.FOX, device), NOOP(enums.Character.FOX)]
     players = [
         PPOAgent(enums.Character.FOX, 1, 2, device, STATE_DIM, ACTION_DIM),
-        CPU(enums.Character.FOX, 1)]
+        CPU(enums.Character.FOX, 5)]
     # players = [NOOP(enums.Character.FOX), NOOP(enums.Character.FOX)]
 
     # normalizer = ObservationNormalizer(s_dim)
@@ -56,46 +56,57 @@ def run():
     players[0].ppo.critic_net = torch.load(args.model_path + "critic_net.pt")
     # normalizer.load(args.model_path)
 
-    for episode_id in range(args.episode_num):
-        score = 0
+    win_rate = [0] * 9
+    lose_rate = [0] * 9
 
-        env = MeleeEnv(args.iso, players, fast_forward=True)
-        env.start()
-        now_s, _ = env.reset(enums.Stage.FINAL_DESTINATION)
+    for diff in range(1, 10):
 
-        action_q = []
-        action_q_idx = 0
-        action_pair = [0, 0]
-        for step_cnt in range(MAX_STEP):
-            if step_cnt > 100:
+        players[1] = CPU(enums.Character.FOX, diff)
 
-                if action_q_idx >= len(action_q):
-                    action_q_idx = 0
-                    a, _ = players[0].act(now_s)
-                    action_q = players[0].action_space.high_action_space[a]
+        for episode_id in range(args.episode_num):
+            score = 0
 
-                action_pair[0] = action_q[action_q_idx]
-                action_pair[1] = players[1].act(now_s[0])
-                action_q_idx += 1
+            env = MeleeEnv(args.iso, players, fast_forward=True)
+            env.start()
+            now_s, _ = env.reset(enums.Stage.FINAL_DESTINATION)
 
-                next_s, r, done, _ = env.step(*action_pair)
-                # next_state = normalizer(next_state)
+            action_q = []
+            action_q_idx = 0
+            action_pair = [0, 0]
+            for step_cnt in range(MAX_STEP):
+                if step_cnt > 100:
 
-                print(r)
+                    if action_q_idx >= len(action_q):
+                        action_q_idx = 0
+                        a, _ = players[0].act(now_s)
+                        action_q = players[0].action_space.high_action_space[a]
 
-                score += r
-                now_s = next_s
+                    action_pair[0] = action_q[action_q_idx]
+                    action_pair[1] = players[1].act(now_s[0])
+                    action_q_idx += 1
 
-                if done:
-                    break
-            else:
-                action_pair = [0, 0]
-                now_s, _, _, _ = env.step(*action_pair)
+                    next_s, r, done, _ = env.step(*action_pair)
+                    # next_state = normalizer(next_state)
 
-        env.close()
+                    score += r
+                    now_s = next_s
 
-        print("episode: ", episode_id, "\tscore: ", score)
+                    if done:
+                        if next_s[0].players[1].stock < next_s[0].players[2].stock:
+                            lose_rate[diff-1] += 1
+                        elif next_s[0].players[1].stock > next_s[0].players[2].stock:
+                            win_rate[diff-1] += 1
+                        break
+                else:
+                    action_pair = [0, 0]
+                    now_s, _, _, _ = env.step(*action_pair)
 
+            env.close()
+
+            print("episode: ", episode_id, "\tscore: ", score)
+
+    print(lose_rate)
+    print(win_rate)
 
 if __name__ == "__main__":
     run()

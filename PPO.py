@@ -241,6 +241,10 @@ class Ppo:
         state1[31] = p2.speed_y_self
         state1[32] = p1.action_frame
         state1[33] = p2.action_frame
+        if p1.action.value < 390:
+            state1[34 + p1.action.value // 10] = 1.0
+        if p2.action.value < 390:
+            state1[34 + 39 + p2.action.value // 10] = 1.0
 
         # for i in range(5):
         #     button = previous_actions[i, self.agent_id-1] // 9
