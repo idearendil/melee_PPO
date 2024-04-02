@@ -209,10 +209,16 @@ class PPOAgent(Agent):
             a = torch.argmax(final_weights).item()
         else:
             # choose an action with probability weights
-            max_weight = np.max(action_prob_np)
-            exp_weights = np.exp((action_prob_np - max_weight) / TAU)
-            exp_weights = self.neglect_invalid_actions(s[0], exp_weights)
-            final_weights = exp_weights / np.sum(exp_weights)
+            # max_weight = np.max(action_prob_np)
+            # exp_weights = np.exp((action_prob_np - max_weight) / TAU)
+            # exp_weights = self.neglect_invalid_actions(s[0], exp_weights)
+            # final_weights = exp_weights / np.sum(exp_weights)
+            # a = random.choices(
+            #     list(range(self.a_dim)), weights=final_weights, k=1)[0]
+            final_weights = np.empty_like(action_prob_np)
+            final_weights[:] = action_prob_np
+            final_weights = self.neglect_invalid_actions(s[0], final_weights)
+            final_weights = final_weights / np.sum(final_weights)
             a = random.choices(
                 list(range(self.a_dim)), weights=final_weights, k=1)[0]
 

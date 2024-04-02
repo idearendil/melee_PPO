@@ -245,12 +245,12 @@ class MyActionSpace:
         self.size = self.action_space.shape[0]
 
         self.high_action_space = [
-            [0, 1, 1],  # 0
-            [0, 2, 2],  # 1
-            [0, 3, 3],  # 2
+            [1, 0],  # 0
+            [2, 0],  # 1
+            [3, 0],  # 2
             [3, 3, 3, 0],  # 3
-            [0, 5, 5],  # 4
-            [0, 6, 6],  # 5
+            [5, 0],  # 4
+            [6, 0],  # 5
             [5, 5, 5, 0],  # 6
             [6, 6, 6, 0],  # 7
             [9, 0],  # 8
@@ -272,9 +272,17 @@ class MyActionSpace:
             [0, 25, 25, 0],  # 24
             [0, 26, 26, 0],  # 25
             [27, 0],  # 26
-            [0, 4, 4],  # 27
-            [0, 7, 7],  # 28
-            [0, 8, 8],  # 29
+            [4, 0],  # 27
+            [7, 0],  # 28
+            [8, 0],  # 29
+            [1, 1],  # 30
+            [2, 2],  # 31
+            [3, 3],  # 32
+            [4, 4],  # 33
+            [5, 5],  # 34
+            [6, 6],  # 35
+            [7, 7],  # 36
+            [8, 8],  # 37
         ]
 
         self.sensor = {
@@ -327,9 +335,9 @@ class MyActionSpace:
             Action.SWORD_DANCE_3_LOW_AIR: [20, 21],
             Action.SWORD_DANCE_3_MID_AIR: [20],
             Action.SWORD_DANCE_3_HIGH_AIR: [20],
-            Action.SWORD_DANCE_4_LOW: [0, 1, 2, 4, 5, 27, 28, 29],
-            Action.SWORD_DANCE_4_MID: [0, 1, 2, 4, 5, 27, 28, 29],
-            Action.SWORD_DANCE_4_HIGH: [0, 1, 2, 4, 5, 27, 28, 29],
+            Action.SWORD_DANCE_4_LOW: [30, 31, 32, 33, 34, 35, 36, 37],
+            Action.SWORD_DANCE_4_MID: [30, 31, 32, 33, 34, 35, 36, 37],
+            Action.SWORD_DANCE_4_HIGH: [30, 31, 32, 33, 34, 35, 36, 37],
             Action.DOWN_B_GROUND_START: [21],
             Action.DOWN_B_GROUND: [21],
             Action.DOWN_B_STUN: [21],

@@ -10,6 +10,7 @@ from model import Actor, Critic
 from parameters import LR_ACTOR, LR_CRITIC, GAMMA, LAMBDA, BATCH_SIZE, \
     EPSILON, L2_RATE, BUFFER_SIZE, BATCH_NUM, ENTROPY_WEIGHT, DELAY
 from replay_buffer import ReplayBuffer
+from math import log
 
 
 class Ppo:
@@ -203,38 +204,42 @@ class Ppo:
         state1[3] = p2.position.y
         state1[4] = p1.position.x - p2.position.x
         state1[5] = p1.position.y - p2.position.y
-        state1[6] = p1.facing * 1.0
-        state1[7] = p2.facing * 1.0
-        state1[8] = p1.hitstun_frames_left
-        state1[9] = p2.hitstun_frames_left
-        state1[10] = p1.invulnerability_left
-        state1[11] = p2.invulnerability_left
-        state1[12] = p1.jumps_left
-        state1[13] = p2.jumps_left
-        state1[14] = p1.off_stage * 1.0
-        state1[15] = p2.off_stage * 1.0
-        state1[16] = p1.on_ground * 1.0
-        state1[17] = p2.on_ground * 1.0
-        state1[18] = p1.percent
-        state1[19] = p2.percent
-        state1[20] = p1.shield_strength
-        state1[21] = p2.shield_strength
-        state1[22] = p1.speed_air_x_self
-        state1[23] = p2.speed_air_x_self
-        state1[24] = p1.speed_ground_x_self
-        state1[25] = p2.speed_ground_x_self
-        state1[26] = p1.speed_x_attack
-        state1[27] = p2.speed_x_attack
-        state1[28] = p1.speed_y_attack
-        state1[29] = p2.speed_y_attack
-        state1[30] = p1.speed_y_self
-        state1[31] = p2.speed_y_self
-        state1[32] = p1.action_frame
-        state1[33] = p2.action_frame
+        state1[6] = 1.0 if p1.facing else -1.0
+        state1[7] = 1.0 if p2.facing else -1.0
+        state1[8] = 1.0 if (p1.position.x - p2.position.x) * state1[6] < 0 \
+            else -1.0
+        state1[9] = log(abs(p1.position.x - p2.position.x))
+        state1[10] = log(abs(p1.position.y - p2.position.y))
+        state1[11] = p1.hitstun_frames_left
+        state1[12] = p2.hitstun_frames_left
+        state1[13] = p1.invulnerability_left
+        state1[14] = p2.invulnerability_left
+        state1[15] = p1.jumps_left
+        state1[16] = p2.jumps_left
+        state1[17] = p1.off_stage * 1.0
+        state1[18] = p2.off_stage * 1.0
+        state1[19] = p1.on_ground * 1.0
+        state1[20] = p2.on_ground * 1.0
+        state1[21] = p1.percent
+        state1[22] = p2.percent
+        state1[23] = p1.shield_strength
+        state1[24] = p2.shield_strength
+        state1[25] = p1.speed_air_x_self
+        state1[26] = p2.speed_air_x_self
+        state1[27] = p1.speed_ground_x_self
+        state1[28] = p2.speed_ground_x_self
+        state1[29] = p1.speed_x_attack
+        state1[30] = p2.speed_x_attack
+        state1[31] = p1.speed_y_attack
+        state1[32] = p2.speed_y_attack
+        state1[33] = p1.speed_y_self
+        state1[34] = p2.speed_y_self
+        state1[35] = p1.action_frame
+        state1[36] = p2.action_frame
         if p1.action.value < 386:
-            state1[34 + p1.action.value] = 1.0
+            state1[37 + p1.action.value] = 1.0
         if p2.action.value < 386:
-            state1[34 + 386 + p2.action.value] = 1.0
+            state1[37 + 386 + p2.action.value] = 1.0
 
         state2 = np.zeros((1,), dtype=np.float32)
 
