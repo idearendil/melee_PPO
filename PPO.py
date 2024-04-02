@@ -208,8 +208,8 @@ class Ppo:
         state1[7] = 1.0 if p2.facing else -1.0
         state1[8] = 1.0 if (p1.position.x - p2.position.x) * state1[6] < 0 \
             else -1.0
-        state1[9] = log(abs(p1.position.x - p2.position.x))
-        state1[10] = log(abs(p1.position.y - p2.position.y))
+        state1[9] = log(abs(p1.position.x - p2.position.x) + 1)
+        state1[10] = log(abs(p1.position.y - p2.position.y) + 1)
         state1[11] = p1.hitstun_frames_left
         state1[12] = p2.hitstun_frames_left
         state1[13] = p1.invulnerability_left

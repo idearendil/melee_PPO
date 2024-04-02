@@ -265,8 +265,12 @@ class PPOAgent(Agent):
             # if already double-jumped, prevent jumping
             action_prob_np[2:8] = 0.0
         if p1.action in [
+            enums.Action.SWORD_DANCE_1,
             enums.Action.SWORD_DANCE_1_AIR,
+            enums.Action.SWORD_DANCE_2_HIGH,
             enums.Action.SWORD_DANCE_2_HIGH_AIR,
+            enums.Action.SWORD_DANCE_2_MID,
+            enums.Action.SWORD_DANCE_2_MID_AIR,
             enums.Action.SWORD_DANCE_3_LOW,
             enums.Action.SWORD_DANCE_3_MID,
             enums.Action.SWORD_DANCE_3_HIGH,
@@ -278,18 +282,17 @@ class PPOAgent(Agent):
             enums.Action.SWORD_DANCE_4_HIGH,
         ]:
             # if currently firefoxing, only tilting stick possible
-            action_prob_np[3] = 0.0
-            action_prob_np[6:27] = 0.0
+            action_prob_np[:30] = 0.0
             if p1.position.x > 0:
                 # prevent suicide
-                action_prob_np[0] = 0.0
-                action_prob_np[4] = 0.0
-                action_prob_np[28] = 0.0
+                action_prob_np[30] = 0.0
+                action_prob_np[34] = 0.0
+                action_prob_np[36] = 0.0
             if p1.position.x < 0:
                 # prevent suicide
-                action_prob_np[1] = 0.0
-                action_prob_np[5] = 0.0
-                action_prob_np[29] = 0.0
+                action_prob_np[31] = 0.0
+                action_prob_np[35] = 0.0
+                action_prob_np[37] = 0.0
         elif p1.action in [
             enums.Action.GRAB,
             enums.Action.GRAB_PULL,
