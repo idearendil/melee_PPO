@@ -155,7 +155,7 @@ class Ppo:
 
             actor_loss_lst.append(actor_loss.item())
             critic_loss_lst.append(critic_loss.item())
-            if batch_id % 1 == 0:
+            if (batch_id + 1) % 15 == 0:
                 print(
                     f'critic loss: {sum(critic_loss_lst)/len(critic_loss_lst):.8f}',
                     f'\t\tactor loss: {sum(actor_loss_lst)/len(actor_loss_lst):.8f}')
