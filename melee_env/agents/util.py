@@ -27,7 +27,7 @@ class ObservationSpace:
             p1_shield_dmg = (
                 self.previous_gamestate.players[1].shield_strength
                 - self.current_gamestate.players[1].shield_strength
-            )
+            ) / (self.current_gamestate.players[1].shield_strength + 1)
             p1_stock_loss = int(self.previous_gamestate.players[1].stock) - int(
                 self.current_gamestate.players[1].stock
             )
@@ -38,7 +38,7 @@ class ObservationSpace:
             p2_shield_dmg = (
                 self.previous_gamestate.players[2].shield_strength
                 - self.current_gamestate.players[2].shield_strength
-            )
+            ) / (self.current_gamestate.players[2].shield_strength + 1)
             p2_stock_loss = int(self.previous_gamestate.players[2].stock) - int(
                 self.current_gamestate.players[2].stock
             )
@@ -51,15 +51,19 @@ class ObservationSpace:
                 p2_stock_loss = 0
             p1_stock_loss = max(p1_stock_loss, 0)
             p2_stock_loss = max(p2_stock_loss, 0)
+            p1_shield_dmg = max(p1_shield_dmg, 0)
+            p2_shield_dmg = max(p2_shield_dmg, 0)
 
-            w_dmg, w_shield, w_stock = 0.1, 0.02, 10
+            w_dmg, w_shield, w_stock = 0.1, 0.3, 5
             p1_loss = (
                 w_dmg * p1_dmg
                 + w_shield * p1_shield_dmg
                 + w_stock * p1_stock_loss
             )
             p2_loss = (
-                w_dmg * p2_dmg + w_shield * p2_shield_dmg + w_stock * p2_stock_loss
+                w_dmg * p2_dmg
+                + w_shield * p2_shield_dmg
+                + w_stock * p2_stock_loss
             )
 
             reward = p2_loss - p1_loss

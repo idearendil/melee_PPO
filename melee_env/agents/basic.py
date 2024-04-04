@@ -261,6 +261,7 @@ class PPOAgent(Agent):
         Prevent invalid/unsafe actions
         """
         p1 = s.players[self.agent_id]
+        edge = EDGE_POSITION.get(s.stage)
         if p1.jumps_left == 0:
             # if already double-jumped, prevent jumping
             action_prob_np[2:8] = 0.0
@@ -285,10 +286,10 @@ class PPOAgent(Agent):
             action_prob_np[:30] = 0.0
             if p1.position.x > 0:
                 # prevent suicide
-                action_prob_np[30] = 0.0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
+                action_prob_np[30] = 0.0
                 action_prob_np[34] = 0.0
                 action_prob_np[36] = 0.0
-            if p1.position.x < 0:
+            else:
                 # prevent suicide
                 action_prob_np[31] = 0.0
                 action_prob_np[35] = 0.0
@@ -329,6 +330,16 @@ class PPOAgent(Agent):
                 # prevent suicide
                 action_prob_np[0] = 0.0
                 action_prob_np[24] = 0.0
+        if p1.action in [
+            enums.Action.LYING_GROUND_DOWN,
+            enums.Action.TECH_MISS_DOWN
+        ]:
+            # when lying down,
+            # only jumping / jab / rolling possible
+            action_prob_np[0:2] = 0.0
+            action_prob_np[3:8] = 0.0
+            action_prob_np[9:24] = 0.0
+            action_prob_np[26:] = 0.0
         if not p1.on_ground:
             # prevent impossible actions when in the air
             action_prob_np[3] = 0.0
@@ -341,21 +352,37 @@ class PPOAgent(Agent):
         else:
             # weak jab only possible in facing direction
             action_prob_np[13] = 0.0
-        if p1.action in [
-            enums.Action.LYING_GROUND_DOWN,
-            enums.Action.TECH_MISS_DOWN
-        ]:
-            # when lying down,
-            # only jumping / jab / rolling possible
-            action_prob_np[0:2] = 0.0
-            action_prob_np[3:8] = 0.0
-            action_prob_np[9:24] = 0.0
-            action_prob_np[26:] = 0.0
         if p1.position.x > 0:
             # prevent suicide
             action_prob_np[18] = 0.0
         if p1.position.x < 0:
             # prevent suicide
             action_prob_np[19] = 0.0
+        if p1.position.x < -edge + 5:
+            # prevent suicide
+            action_prob_np[1] = 0.0
+            action_prob_np[31] = 0.0
+        if p1.position.x > edge - 5:
+            # prevent suicide
+            action_prob_np[0] = 0.0
+            action_prob_np[30] = 0.0
+        if p1.position.y < -10:
+            # emergency!!! only firefoxing allowed
+            if p1.action not in [
+                enums.Action.EDGE_CATCHING,
+                enums.Action.EDGE_HANGING,
+                enums.Action.EDGE_TEETERING,
+                enums.Action.EDGE_TEETERING_START
+            ]:
+                action_prob_np[:20] = 0.0
+                if p1.position.x < -edge - 10:
+                    action_prob_np[21:34] = 0.0
+                    action_prob_np[35:] = 0.0
+                elif p1.position.x > edge + 10:
+                    action_prob_np[21:35] = 0.0
+                    action_prob_np[36:] = 0.0
+                else:
+                    action_prob_np[21:32] = 0.0
+                    action_prob_np[33:] = 0.0
 
         return action_prob_np
