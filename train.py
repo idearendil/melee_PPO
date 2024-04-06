@@ -145,19 +145,21 @@ def run():
         NOOP(enums.Character.FOX)
         ]
 
+    episode_id = 0
     # normalizer = ObservationNormalizer(s_dim)
     if args.continue_training:
         players[0].ppo.actor_net = torch.load(
             args.model_path + "actor_net.pt").to(device)
         players[0].ppo.critic_net = torch.load(
             args.model_path + "critic_net.pt").to(device)
+        df = pd.read_csv("log_melee.csv")
+        episode_id = len(df)
         # normalizer.load(args.model_path)
     else:
         with open("log_" + args.env_name + ".csv",
                   "w",
                   encoding="utf-8") as outfile:
             outfile.write("episode_id,score\n")
-    episode_id = 0
 
     no_sensor = []
 

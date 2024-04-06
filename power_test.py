@@ -59,7 +59,7 @@ def run():
     win_rate = [0] * 9
     lose_rate = [0] * 9
 
-    for diff in range(9, 10):
+    for diff in range(1, 10):
 
         players[1] = CPU(enums.Character.FOX, diff)
 
