@@ -146,16 +146,16 @@ def run():
         ]
 
     episode_id = 0
-    # normalizer = ObservationNormalizer(s_dim)
     if args.continue_training:
+        # load pre-trained models
         players[0].ppo.actor_net = torch.load(
             args.model_path + "actor_net.pt").to(device)
         players[0].ppo.critic_net = torch.load(
             args.model_path + "critic_net.pt").to(device)
         df = pd.read_csv("log_melee.csv")
-        episode_id = len(df)
-        # normalizer.load(args.model_path)
+        episode_id = len(df) - 1
     else:
+        # clear log file
         with open("log_" + args.env_name + ".csv",
                   "w",
                   encoding="utf-8") as outfile:
@@ -164,11 +164,12 @@ def run():
     no_sensor = []
 
     for cycle_id in range(CYCLE_NUM):
-        scores = []
-        players[0].ppo.buffer.buffer.clear()  # off-policy? on-policy?
+        scores = []  # for log
+        players[0].ppo.buffer.buffer.clear()  # PPO is an on-policy algorithm
         while players[0].ppo.buffer.size() < MIN_TUPLES_IN_CYCLE:
             episode_id += 1
             score = 0
+            fucked_up_cnt = 0
 
             players[1] = CPU(enums.Character.FOX, random.randint(1, 9))
 
@@ -178,60 +179,60 @@ def run():
 
             episode_memory = []
             episode_buffer = []
-            a, a_prob = None, None
+
+            action_pair = [0, 0]
+
             r_sum = 0
             mask_sum = 1
             action_q = []
             action_q_idx = 0
-            action_pair = [0, 0]
             last_state_idx = -1
-            fucked_up_cnt = 0
             for step_cnt in range(MAX_STEP):
-                if step_cnt > 100:
+                if step_cnt > 100:  # if step_cnt < 100, it's not started yet
 
                     if action_q_idx >= len(action_q):
+                        # the agent should select action
                         action_q_idx = 0
                         a, a_prob = players[0].act(now_s)
                         action_q = players[0].action_space.high_action_space[a]
+                        episode_buffer.append([now_s, a, a_prob, step_cnt])
 
                     action_pair[0] = action_q[action_q_idx]
+                    action_q_idx += 1
                     action_pair[1] = players[1].act(now_s[0])
 
-                    next_s, r, done, _ = env.step(*action_pair)
+                    now_s, r, done, _ = env.step(*action_pair)
                     mask = (1 - done) * 1
-                    # next_state = normalizer(next_state)
-
-                    if action_q_idx == 0:
-                        episode_buffer.append([now_s, a, a_prob, step_cnt])
-                    action_q_idx += 1
-
-                    score += r
-                    now_s = next_s
+                    score += r  # for log
 
                     p1_action = now_s[0].players[1].action
 
                     if done:
+                        # if finished, add last information to episode memory
                         r_sum += r
                         mask_sum *= mask
                         temp = episode_buffer[last_state_idx]
                         episode_memory.append([temp[0], temp[1], r_sum, mask_sum, temp[2]])
                         break
                     elif p1_action in players[0].action_space.sensor:
+                        # if agent's animation is in sensor set
                         action_candidate = players[0].action_space.sensor[p1_action]
                         if last_state_idx < 0 or episode_buffer[last_state_idx][1] not in action_candidate:
+                            # agent's action has changed!
                             for i in range(len(episode_buffer)-1, -2, -1):
+                                # find action which caused agent's now animation
                                 if i <= last_state_idx:
-                                    # print('There is no proper action record!', p1_action, action_candidate)
-                                    # for j in range(len(episode_buffer)-1, last_state_idx, -1):
-                                    #     print(episode_buffer[j][1])
+                                    # there is no action may caused agent's now animation
                                     if last_state_idx >= 0:
                                         episode_buffer[last_state_idx][1] = action_candidate[0]
                                     fucked_up_cnt += 1
                                     break
                                 if episode_buffer[i][3] > step_cnt - DELAY:
+                                    # action can cause animation after 2 frames at least
                                     continue
                                 if episode_buffer[i][1] in action_candidate:
                                     if last_state_idx >= 0:
+                                        # save last action and its consequence in episode memory
                                         temp = episode_buffer[last_state_idx]
                                         episode_memory.append([temp[0], temp[1], r_sum, mask_sum, temp[2]])
                                     r_sum = 0
@@ -255,7 +256,6 @@ def run():
             print('episode:', episode_id,
                   '\tbuffer length:', players[0].ppo.buffer.size(),
                   '\tfucked up:', fucked_up_cnt)
-            episode_memory = []
 
             with open(
                 "log_" + args.env_name + ".csv", "a", encoding="utf-8"
@@ -263,7 +263,7 @@ def run():
                 outfile.write(str(episode_id) + "," + str(score) + "\n")
             scores.append(score)
 
-            with open("no_sensor.txt",
+            with open("additional_files/no_sensor.txt",
                       "w",
                       encoding="utf-8") as outfile:
                 for a_action in no_sensor:
@@ -279,7 +279,6 @@ def run():
             players[0].ppo.actor_net, args.model_path + "actor_net.pt")
         torch.save(
             players[0].ppo.critic_net, args.model_path + "critic_net.pt")
-        # normalizer.save(args.model_path)
 
     log_df = pd.read_csv("log_" + args.env_name + ".csv")
     plt.plot(log_df["episode_id"], log_df["score"])
