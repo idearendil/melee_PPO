@@ -7,8 +7,19 @@ import numpy as np
 import torch
 from torch.distributions import Categorical
 from model import Actor, Critic
-from parameters import LR_ACTOR, LR_CRITIC, GAMMA, LAMBDA, BATCH_SIZE, \
-    EPSILON, L2_RATE, BUFFER_SIZE, BATCH_NUM, ENTROPY_WEIGHT, DELAY
+from parameters import (
+    LR_ACTOR,
+    LR_CRITIC,
+    GAMMA,
+    LAMBDA,
+    BATCH_SIZE,
+    EPSILON,
+    L2_RATE,
+    BUFFER_SIZE,
+    BATCH_NUM,
+    ENTROPY_WEIGHT,
+    DELAY,
+)
 from replay_buffer import ReplayBuffer
 from math import log
 
@@ -17,6 +28,7 @@ class Ppo:
     """
     The class which Proximal Policy Optimization is implemented in.
     """
+
     def __init__(self, s_dim, a_dim, agent_id, opponent_id, device):
         self.device = device
         self.actor_net = Actor(s_dim, a_dim).to(self.device)
@@ -58,8 +70,7 @@ class Ppo:
             None
         """
 
-        s_lst, a_lst, r_lst, mask_lst, prob_lst = \
-            [], [], [], [], []
+        s_lst, a_lst, r_lst, mask_lst, prob_lst = [], [], [], [], []
         for s, a, r, mask, prob in data:
             s_lst.append(s)
             a_lst.append(a)
@@ -74,10 +85,8 @@ class Ppo:
             s_lst1.append(s1)
             s_lst2.append(s2)
 
-        s_ts1 = torch.Tensor(
-            np.array(s_lst1, dtype=np.float32)).to(self.device)
-        s_ts2 = torch.Tensor(
-            np.array(s_lst2, dtype=np.float32)).to(self.device)
+        s_ts1 = torch.Tensor(np.array(s_lst1, dtype=np.float32)).to(self.device)
+        s_ts2 = torch.Tensor(np.array(s_lst2, dtype=np.float32)).to(self.device)
         r_ts = torch.Tensor(np.array(r_lst, dtype=np.float32))
         masks = torch.Tensor(np.array(mask_lst, dtype=np.float32))
 
@@ -85,32 +94,36 @@ class Ppo:
             self.critic_net.eval()
             v_lst = []
             for idx in range(0, len(s_ts1), BATCH_SIZE):
-                idx_end = min(idx+BATCH_SIZE, len(s_ts1))
-                v_lst.append(self.critic_net(
-                    (s_ts1[idx:idx_end], s_ts2[idx:idx_end])).cpu())
+                idx_end = min(idx + BATCH_SIZE, len(s_ts1))
+                v_lst.append(
+                    self.critic_net((s_ts1[idx:idx_end], s_ts2[idx:idx_end])).cpu()
+                )
             v_ts = torch.concatenate(v_lst, dim=0)
             ret_ts, adv_ts = self.get_gae(r_ts, masks, v_ts)
 
         for idx, _ in enumerate(s_ts1):
-            self.buffer.push((s_lst[idx],
-                              a_lst[idx],
-                              adv_ts[idx].item(),
-                              ret_ts[idx].item(),
-                              prob_lst[idx]))
+            self.buffer.push(
+                (
+                    s_lst[idx],
+                    a_lst[idx],
+                    adv_ts[idx].item(),
+                    ret_ts[idx].item(),
+                    prob_lst[idx],
+                )
+            )
 
     def train(self):
         """
         Train Actor network and Critic network with data in buffer.
         """
-        print('buffer size: ', self.buffer.size())
+        print("buffer size: ", self.buffer.size())
 
         self.actor_net.train()
         self.critic_net.train()
         critic_loss_lst, actor_loss_lst = [], []
         for batch_id in range(BATCH_NUM):
 
-            s_lst, a_lst, adv_lst, ret_lst, op_lst = \
-                self.buffer.pull(BATCH_SIZE)
+            s_lst, a_lst, adv_lst, ret_lst, op_lst = self.buffer.pull(BATCH_SIZE)
 
             s_lst1 = []
             s_lst2 = []
@@ -122,10 +135,16 @@ class Ppo:
             st_ts1 = torch.Tensor(np.stack(s_lst1, axis=0)).to(self.device)
             st_ts2 = torch.Tensor(np.stack(s_lst2, axis=0)).to(self.device)
             a_ts = torch.LongTensor(a_lst).to(self.device).unsqueeze(1)
-            adv_ts = torch.Tensor(np.array(
-                adv_lst, dtype=np.float32)).unsqueeze(1).to(self.device)
-            ret_ts = torch.Tensor(np.array(
-                ret_lst, dtype=np.float32)).unsqueeze(1).to(self.device)
+            adv_ts = (
+                torch.Tensor(np.array(adv_lst, dtype=np.float32))
+                .unsqueeze(1)
+                .to(self.device)
+            )
+            ret_ts = (
+                torch.Tensor(np.array(ret_lst, dtype=np.float32))
+                .unsqueeze(1)
+                .to(self.device)
+            )
             op_ts = torch.Tensor(np.stack(op_lst, axis=0)).to(self.device)
 
             v_ts = self.critic_net((st_ts1, st_ts2))
@@ -157,8 +176,9 @@ class Ppo:
             critic_loss_lst.append(critic_loss.item())
             if (batch_id + 1) % 15 == 0:
                 print(
-                    f'critic loss: {sum(critic_loss_lst)/len(critic_loss_lst):.8f}',
-                    f'\t\tactor loss: {sum(actor_loss_lst)/len(actor_loss_lst):.8f}')
+                    f"critic loss: {sum(critic_loss_lst)/len(critic_loss_lst):.8f}",
+                    f"\t\tactor loss: {sum(actor_loss_lst)/len(actor_loss_lst):.8f}",
+                )
                 actor_loss_lst.clear()
                 critic_loss_lst.clear()
 
@@ -170,12 +190,10 @@ class Ppo:
         masks = torch.Tensor(masks)
         returns = torch.zeros_like(rewards)
         advants = torch.zeros_like(rewards)
-        running_returns = 0
         previous_value = 0
         running_advants = 0
 
         for t in reversed(range(0, len(rewards))):
-            running_returns = rewards[t] + GAMMA * running_returns * masks[t]
             running_tderror = (
                 rewards[t] + GAMMA * previous_value * masks[t] - values.data[t]
             )
@@ -183,7 +201,7 @@ class Ppo:
                 running_tderror + GAMMA * LAMBDA * running_advants * masks[t]
             )
 
-            returns[t] = running_returns
+            returns[t] = rewards[t] + GAMMA * previous_value * masks[t]
             previous_value = values.data[t]
             advants[t] = running_advants
         advants = (advants - advants.mean()) / advants.std()
@@ -206,8 +224,7 @@ class Ppo:
         state1[5] = p1.position.y - p2.position.y
         state1[6] = 1.0 if p1.facing else -1.0
         state1[7] = 1.0 if p2.facing else -1.0
-        state1[8] = 1.0 if (p1.position.x - p2.position.x) * state1[6] < 0 \
-            else -1.0
+        state1[8] = 1.0 if (p1.position.x - p2.position.x) * state1[6] < 0 else -1.0
         state1[9] = log(abs(p1.position.x - p2.position.x) + 1)
         state1[10] = log(abs(p1.position.y - p2.position.y) + 1)
         state1[11] = p1.hitstun_frames_left

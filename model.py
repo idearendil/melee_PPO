@@ -1,6 +1,7 @@
 """
 The file of actor and critic architectures.
 """
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,6 +14,7 @@ class Actor(nn.Module):
     """
     Actor network
     """
+
     def __init__(self, s_dim, a_dim):
         super(Actor, self).__init__()
         self.fc1 = nn.Linear(s_dim, 256)
@@ -23,6 +25,7 @@ class Actor(nn.Module):
         self.bn1d_2 = nn.BatchNorm1d(256)
         self.bn1d_3 = nn.BatchNorm1d(128)
         self.a_dim = a_dim
+        self.activ = nn.ELU()
 
     def forward(self, s):
         """
@@ -35,9 +38,9 @@ class Actor(nn.Module):
         """
         s1, s2 = s
 
-        s1 = self.bn1d_1(torch.tanh(self.fc1(s1)))
-        s1 = self.bn1d_2(torch.tanh(self.fc2(s1)))
-        s1 = self.bn1d_3(torch.tanh(self.fc3(s1)))
+        s1 = self.bn1d_1(self.activ(self.fc1(s1)))
+        s1 = self.bn1d_2(self.activ(self.fc2(s1)))
+        s1 = self.bn1d_3(self.activ(self.fc3(s1)))
         return self.fc4(s1)
 
     def choose_action(self, s):
@@ -62,6 +65,7 @@ class Critic(nn.Module):
     """
     Critic network
     """
+
     def __init__(self, s_dim):
         super(Critic, self).__init__()
         self.fc1 = nn.Linear(s_dim, 256)
@@ -71,6 +75,7 @@ class Critic(nn.Module):
         self.bn1d_1 = nn.BatchNorm1d(256)
         self.bn1d_2 = nn.BatchNorm1d(256)
         self.bn1d_3 = nn.BatchNorm1d(128)
+        self.activ = nn.ELU()
 
     def forward(self, s):
         """
@@ -83,7 +88,7 @@ class Critic(nn.Module):
         """
         s1, s2 = s
 
-        s1 = self.bn1d_1(torch.tanh(self.fc1(s1)))
-        s1 = self.bn1d_2(torch.tanh(self.fc2(s1)))
-        s1 = self.bn1d_3(torch.tanh(self.fc3(s1)))
+        s1 = self.bn1d_1(self.activ(self.fc1(s1)))
+        s1 = self.bn1d_2(self.activ(self.fc2(s1)))
+        s1 = self.bn1d_3(self.activ(self.fc3(s1)))
         return self.fc4(s1)
