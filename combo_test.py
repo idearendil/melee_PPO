@@ -22,8 +22,8 @@ env.start()
 # action_buffer = deque(maxlen=3)
 # action_sequence = [1] + [0] * 10 + [19] + [0] * 40 + [4]
 # action_sequence = [3] + [0] * 50 + [19] + [0] * 40 + [3] + [0] * 50 + [43]
-action_sequence = [23] * 100
-action_sequence2 = [18, 0] * 30
+action_sequence = [1] * 3 + [0] * 20 + [19] + [0] * 40 + [3]
+action_sequence2 = [0] * 100
 if len(action_sequence) > len(action_sequence2):
     action_sequence2.extend([0] * (len(action_sequence) - len(action_sequence2)))
 else:

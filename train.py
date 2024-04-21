@@ -8,104 +8,24 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from melee import enums
-from parameters import \
-    MAX_STEP, CYCLE_NUM, MIN_TUPLES_IN_CYCLE, STATE_DIM, ACTION_DIM, DELAY
+from parameters import (
+    MAX_STEP,
+    CYCLE_NUM,
+    MIN_TUPLES_IN_CYCLE,
+    STATE_DIM,
+    ACTION_DIM,
+    DELAY,
+)
+
 # from observation_normalizer import ObservationNormalizer
 from melee_env.myenv import MeleeEnv
 from melee_env.agents.basic import PPOAgent, NOOP, CPU
 import random
 
 
-useless_animations = [
-    enums.Action.GRAB_PULL,
-    enums.Action.MARTH_COUNTER,
-    enums.Action.SHINE_TURN,
-    enums.Action.FTILT_HIGH,
-    enums.Action.STANDING,
-    enums.Action.KNEE_BEND,
-    enums.Action.ENTRY,
-    enums.Action.ENTRY_START,
-    enums.Action.ENTRY_END,
-    enums.Action.FALLING,
-    enums.Action.LANDING,
-    enums.Action.DEAD_FALL,
-    enums.Action.DEAD_DOWN,
-    enums.Action.ON_HALO_DESCENT,
-    enums.Action.ON_HALO_WAIT,
-    enums.Action.GRABBED,
-    enums.Action.GRAB_PUMMELED,
-    enums.Action.CROUCH_START,
-    enums.Action.TECH_MISS_UP,
-    enums.Action.TECH_MISS_DOWN,
-    enums.Action.WALK_SLOW,
-    enums.Action.CROUCHING,
-    enums.Action.THROWN_BACK,
-    enums.Action.THROWN_COPY_STAR,
-    enums.Action.THROWN_CRAZY_HAND,
-    enums.Action.THROWN_DOWN,
-    enums.Action.THROWN_DOWN_2,
-    enums.Action.THROWN_FB,
-    enums.Action.THROWN_FF,
-    enums.Action.THROWN_FORWARD,
-    enums.Action.THROWN_F_HIGH,
-    enums.Action.THROWN_F_LOW,
-    enums.Action.THROWN_UP,
-    enums.Action.DAMAGE_AIR_1,
-    enums.Action.DAMAGE_AIR_2,
-    enums.Action.DAMAGE_AIR_3,
-    enums.Action.DAMAGE_BIND,
-    enums.Action.DAMAGE_FLY_HIGH,
-    enums.Action.DAMAGE_FLY_LOW,
-    enums.Action.DAMAGE_FLY_NEUTRAL,
-    enums.Action.DAMAGE_FLY_ROLL,
-    enums.Action.DAMAGE_FLY_TOP,
-    enums.Action.DAMAGE_GROUND,
-    enums.Action.DAMAGE_HIGH_1,
-    enums.Action.DAMAGE_HIGH_2,
-    enums.Action.DAMAGE_HIGH_3,
-    enums.Action.DAMAGE_ICE,
-    enums.Action.DAMAGE_ICE_JUMP,
-    enums.Action.DAMAGE_LOW_1,
-    enums.Action.DAMAGE_LOW_2,
-    enums.Action.DAMAGE_LOW_3,
-    enums.Action.DAMAGE_NEUTRAL_1,
-    enums.Action.DAMAGE_NEUTRAL_2,
-    enums.Action.DAMAGE_NEUTRAL_3,
-    enums.Action.DAMAGE_SCREW,
-    enums.Action.DAMAGE_SCREW_AIR,
-    enums.Action.DAMAGE_SONG,
-    enums.Action.DAMAGE_SONG_RV,
-    enums.Action.DAMAGE_SONG_WAIT,
-    enums.Action.UNKNOWN_ANIMATION,
-    enums.Action.EDGE_ATTACK_QUICK,
-    enums.Action.EDGE_ATTACK_SLOW,
-    enums.Action.EDGE_CATCHING,
-    enums.Action.EDGE_GETUP_QUICK,
-    enums.Action.EDGE_GETUP_SLOW,
-    enums.Action.EDGE_HANGING,
-    enums.Action.EDGE_JUMP_1_QUICK,
-    enums.Action.EDGE_JUMP_1_SLOW,
-    enums.Action.EDGE_JUMP_2_QUICK,
-    enums.Action.EDGE_JUMP_2_SLOW,
-    enums.Action.EDGE_ROLL_QUICK,
-    enums.Action.EDGE_ROLL_SLOW,
-    enums.Action.EDGE_TEETERING,
-    enums.Action.EDGE_TEETERING_START,
-
-    # 조사 필요
-    enums.Action.GRAB_RUNNING_PULLING,
-    enums.Action.PLATFORM_DROP,
-    enums.Action.WALK_MIDDLE,
-    enums.Action.WALK_FAST,
-]
-
-
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--env_name",
-    type=str,
-    default="melee",
-    help="name of environement"
+    "--env_name", type=str, default="melee", help="name of environement"
 )
 parser.add_argument(
     "--continue_training",
@@ -114,16 +34,13 @@ parser.add_argument(
     help="whether to continue training with existing models",
 )
 parser.add_argument(
-    "--model_path",
-    type=str,
-    default="./models/",
-    help="where models are saved"
+    "--model_path", type=str, default="./models/", help="where models are saved"
 )
 parser.add_argument(
     "--iso",
     type=str,
-    default='../ssbm.iso',
-    help="Path to your NTSC 1.02/PAL SSBM Melee ISO"
+    default="../ssbm.iso",
+    help="Path to your NTSC 1.02/PAL SSBM Melee ISO",
 )
 args = parser.parse_args()
 
@@ -133,8 +50,9 @@ def run():
     Start training with given options.
     """
 
-    device = torch.device('cuda:0') if torch.cuda.is_available() \
-        else torch.device('cpu')
+    device = (
+        torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+    )
     print(device)
 
     torch.manual_seed(500)
@@ -142,26 +60,24 @@ def run():
 
     players = [
         PPOAgent(enums.Character.FOX, 1, 2, device, STATE_DIM, ACTION_DIM),
-        NOOP(enums.Character.FOX)
-        ]
+        NOOP(enums.Character.FOX),
+    ]
 
     episode_id = 0
     if args.continue_training:
         # load pre-trained models
-        players[0].ppo.actor_net = torch.load(
-            args.model_path + "actor_net.pt").to(device)
-        players[0].ppo.critic_net = torch.load(
-            args.model_path + "critic_net.pt").to(device)
+        players[0].ppo.actor_net = torch.load(args.model_path + "actor_net.pt").to(
+            device
+        )
+        players[0].ppo.critic_net = torch.load(args.model_path + "critic_net.pt").to(
+            device
+        )
         df = pd.read_csv("log_melee.csv")
         episode_id = len(df) - 1
     else:
         # clear log file
-        with open("log_" + args.env_name + ".csv",
-                  "w",
-                  encoding="utf-8") as outfile:
+        with open("log_" + args.env_name + ".csv", "w", encoding="utf-8") as outfile:
             outfile.write("episode_id,score\n")
-
-    no_sensor = []
 
     for cycle_id in range(CYCLE_NUM):
         scores = []  # for log
@@ -205,47 +121,46 @@ def run():
                     mask = (1 - done) * 1
                     score += r  # for log
 
-                    p1_action = now_s[0].players[1].action
+                    r_sum += r
+                    mask_sum *= mask
 
                     if done:
                         # if finished, add last information to episode memory
-                        r_sum += r
-                        mask_sum *= mask
                         temp = episode_buffer[last_state_idx]
-                        episode_memory.append([temp[0], temp[1], r_sum, mask_sum, temp[2]])
+                        episode_memory.append(
+                            [temp[0], temp[1], r_sum, mask_sum, temp[2]]
+                        )
                         break
-                    elif p1_action in players[0].action_space.sensor:
-                        # if agent's animation is in sensor set
-                        action_candidate = players[0].action_space.sensor[p1_action]
-                        if last_state_idx < 0 or episode_buffer[last_state_idx][1] not in action_candidate:
-                            # agent's action has changed!
-                            for i in range(len(episode_buffer)-1, -2, -1):
-                                # find action which caused agent's now animation
-                                if i <= last_state_idx:
-                                    # there is no action may caused agent's now animation
-                                    if last_state_idx >= 0:
-                                        episode_buffer[last_state_idx][1] = action_candidate[0]
-                                    fucked_up_cnt += 1
-                                    break
+
+                    elif now_s[0].players[1].action_frame == 1:
+                        # if agent's new action animation just started
+                        p1_action = now_s[0].players[1].action
+                        if p1_action in players[0].action_space.sensor:
+                            # if agent's animation is in sensor set
+                            # find action which caused agent's current animation
+                            action_candidate = players[0].action_space.sensor[p1_action]
+                            action_is_found = False
+                            for i in range(len(episode_buffer) - 1, last_state_idx, -1):
+
                                 if episode_buffer[i][3] > step_cnt - DELAY:
                                     # action can cause animation after 2 frames at least
                                     continue
+
                                 if episode_buffer[i][1] in action_candidate:
                                     if last_state_idx >= 0:
                                         # save last action and its consequence in episode memory
                                         temp = episode_buffer[last_state_idx]
-                                        episode_memory.append([temp[0], temp[1], r_sum, mask_sum, temp[2]])
+                                        episode_memory.append(
+                                            [temp[0], temp[1], r_sum, mask_sum, temp[2]]
+                                        )
                                     r_sum = 0
                                     mask_sum = 1
                                     last_state_idx = i
+                                    action_is_found = True
                                     break
-                    else:
-                        if p1_action not in useless_animations:
-                            if p1_action not in no_sensor:
-                                print('There\'s no sensor on:', p1_action)
-                                no_sensor.append(p1_action)
-                    r_sum += r
-                    mask_sum *= mask
+
+                            if not action_is_found:
+                                fucked_up_cnt += 1
                 else:
                     action_pair = [0, 0]
                     now_s, _, _, _ = env.step(*action_pair)
@@ -253,9 +168,14 @@ def run():
             env.close()
 
             players[0].ppo.push_an_episode(episode_memory)
-            print('episode:', episode_id,
-                  '\tbuffer length:', players[0].ppo.buffer.size(),
-                  '\tfucked up:', fucked_up_cnt)
+            print(
+                "episode:",
+                episode_id,
+                "\tbuffer length:",
+                players[0].ppo.buffer.size(),
+                "\tfucked up:",
+                fucked_up_cnt,
+            )
 
             with open(
                 "log_" + args.env_name + ".csv", "a", encoding="utf-8"
@@ -263,22 +183,12 @@ def run():
                 outfile.write(str(episode_id) + "," + str(score) + "\n")
             scores.append(score)
 
-            with open("additional_files/no_sensor.txt",
-                      "w",
-                      encoding="utf-8") as outfile:
-                for a_action in no_sensor:
-                    outfile.write(str(a_action.value)+'\n')
-
         score_avg = np.mean(scores)
-        print("cycle: ", cycle_id,
-              "\tepisode: ", episode_id,
-              "\tscore: ", score_avg)
+        print("cycle: ", cycle_id, "\tepisode: ", episode_id, "\tscore: ", score_avg)
 
         players[0].ppo.train()
-        torch.save(
-            players[0].ppo.actor_net, args.model_path + "actor_net.pt")
-        torch.save(
-            players[0].ppo.critic_net, args.model_path + "critic_net.pt")
+        torch.save(players[0].ppo.actor_net, args.model_path + "actor_net.pt")
+        torch.save(players[0].ppo.critic_net, args.model_path + "critic_net.pt")
 
     log_df = pd.read_csv("log_" + args.env_name + ".csv")
     plt.plot(log_df["episode_id"], log_df["score"])

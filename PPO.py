@@ -204,7 +204,7 @@ class Ppo:
             returns[t] = rewards[t] + GAMMA * previous_value * masks[t]
             previous_value = values.data[t]
             advants[t] = running_advants
-        advants = (advants - advants.mean()) / advants.std()
+        # advants = (advants - advants.mean()) / advants.std()
         return returns, advants
 
     def state_preprocessor(self, s):
