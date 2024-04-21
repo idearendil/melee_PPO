@@ -48,12 +48,15 @@ def run():
     # players = [PPOAgent(enums.Character.FOX, device), NOOP(enums.Character.FOX)]
     players = [
         PPOAgent(enums.Character.FOX, 1, 2, device, STATE_DIM, ACTION_DIM),
-        CPU(enums.Character.FOX, 5)]
+        PPOAgent(enums.Character.FOX, 2, 1, device, STATE_DIM, ACTION_DIM),
+    ]
     # players = [NOOP(enums.Character.FOX), NOOP(enums.Character.FOX)]
 
     # normalizer = ObservationNormalizer(s_dim)
     players[0].ppo.actor_net = torch.load(args.model_path + "actor_net.pt")
     players[0].ppo.critic_net = torch.load(args.model_path + "critic_net.pt")
+    players[1].ppo.actor_net = torch.load(args.model_path + "actor_net.pt")
+    players[1].ppo.critic_net = torch.load(args.model_path + "critic_net.pt")
     # normalizer.load(args.model_path)
 
     for episode_id in range(args.episode_num):
@@ -63,20 +66,12 @@ def run():
         env.start()
         now_s, _ = env.reset(enums.Stage.FINAL_DESTINATION)
 
-        action_q = []
-        action_q_idx = 0
         action_pair = [0, 0]
         for step_cnt in range(MAX_STEP):
             if step_cnt > 100:
 
-                if action_q_idx >= len(action_q):
-                    action_q_idx = 0
-                    a, _ = players[0].act(now_s)
-                    action_q = players[0].action_space.high_action_space[a]
-
-                action_pair[0] = action_q[action_q_idx]
-                action_pair[1] = players[1].act(now_s[0])
-                action_q_idx += 1
+                action_pair[0], _ = players[0].act(now_s)
+                action_pair[1], _ = players[1].act(now_s)
 
                 next_s, r, done, _ = env.step(*action_pair)
                 # next_state = normalizer(next_state)
@@ -93,6 +88,7 @@ def run():
         env.close()
 
         print("episode: ", episode_id, "\tscore: ", score)
+
 
 if __name__ == "__main__":
     run()

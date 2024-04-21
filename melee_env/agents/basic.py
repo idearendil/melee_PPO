@@ -176,8 +176,18 @@ class PPOAgent(Agent):
     """
     An agent using PPO algorithm.
     """
-    def __init__(self, character, agent_id, opponent_id, device, s_dim, a_dim,
-                 test_mode=False, auto_fire=False):
+
+    def __init__(
+        self,
+        character,
+        agent_id,
+        opponent_id,
+        device,
+        s_dim,
+        a_dim,
+        test_mode=False,
+        auto_fire=False,
+    ):
         super().__init__()
         self.character = character
         self.agent_id = agent_id
@@ -190,71 +200,48 @@ class PPOAgent(Agent):
         self.action_space = MyActionSpace()
 
         self.action = 0
-        self.ppo = Ppo(
-            self.s_dim, self.a_dim, self.agent_id, self.opponent_id, self.device)
+        self.ppo = Ppo(self.s_dim, self.a_dim, self.device)
         self.test_mode = test_mode
 
-        # Following annotations are for auto firefoxing(not yet implemented!).
-
-        # self.auto_fire = auto_fire
-        # self.firefoxing = False
-        # self.requested_firefoxing = False
+        self.action_q = []
+        self.action_q_idx = 0
 
     def act(self, s):
-        action_prob_np = self.ppo.choose_action(s)
 
-        if self.test_mode:
-            # choose the most probable action
-            final_weights = self.neglect_invalid_actions(s[0], action_prob_np)
-            a = torch.argmax(final_weights).item()
-        else:
-            # choose an action with probability weights
-            # max_weight = np.max(action_prob_np)
-            # exp_weights = np.exp((action_prob_np - max_weight) / TAU)
-            # exp_weights = self.neglect_invalid_actions(s[0], exp_weights)
-            # final_weights = exp_weights / np.sum(exp_weights)
-            # a = random.choices(
-            #     list(range(self.a_dim)), weights=final_weights, k=1)[0]
-            final_weights = np.empty_like(action_prob_np)
-            final_weights[:] = action_prob_np
-            final_weights = self.neglect_invalid_actions(s[0], final_weights)
-            final_weights = final_weights / np.sum(final_weights)
-            a = random.choices(
-                list(range(self.a_dim)), weights=final_weights, k=1)[0]
+        act_data = None
 
-        # if self.auto_fire and s[0].players[self.agent_id].y < -10:
-        #     p1 = s[0].players[self.agent_id]
-        #     if p1.action in [
-        #         enums.Action.SWORD_DANCE_3_MID,
-        #         enums.Action.SWORD_DANCE_3_LOW,
-        #         enums.Action.SWORD_DANCE_3_HIGH,
-        #         enums.Action.SWORD_DANCE_3_LOW_AIR,
-        #         enums.Action.SWORD_DANCE_3_MID_AIR,
-        #         enums.Action.SWORD_DANCE_3_HIGH_AIR,
-        #         enums.Action.SWORD_DANCE_4_MID
-        #     ]:
-        #         self.firefoxing = True
-        #     else:
-        #         self.firefoxing = False
-        #     if not self.firefoxing:
-        #         if self.requested_firefoxing:
-        #             self.requested_firefoxing = False
-        #             return 0, a_prob
-        #         else:
-        #             self.requested_firefoxing = True
-        #             return 19, a_prob
-        #     else:
-        #         edge = EDGE_POSITION.get(s[0].stage)
-        #         if p1.position.x < -edge - 10:
-        #             return 2, a_prob
-        #         elif p1.position.x > edge + 10:
-        #             return 8, a_prob
-        #         else:
-        #             return 5, a_prob
-        # else:
-        #     self.firefoxing = False
+        if self.action_q_idx >= len(self.action_q):
+            # the agent should select action
+            self.action_q_idx = 0
 
-        return a, action_prob_np
+            action_prob_np = self.ppo.choose_action(s, self.agent_id)
+
+            if self.test_mode:
+                # choose the most probable action
+                final_weights = self.neglect_invalid_actions(s[0], action_prob_np)
+                a = torch.argmax(final_weights).item()
+            else:
+                # choose an action with probability weights
+                # max_weight = np.max(action_prob_np)
+                # exp_weights = np.exp((action_prob_np - max_weight) / TAU)
+                # exp_weights = self.neglect_invalid_actions(s[0], exp_weights)
+                # final_weights = exp_weights / np.sum(exp_weights)
+                # a = random.choices(
+                #     list(range(self.a_dim)), weights=final_weights, k=1)[0]
+                final_weights = np.empty_like(action_prob_np)
+                final_weights[:] = action_prob_np
+                final_weights = self.neglect_invalid_actions(s[0], final_weights)
+                final_weights = final_weights / np.sum(final_weights)
+                a = random.choices(list(range(self.a_dim)), weights=final_weights, k=1)[
+                    0
+                ]
+            self.action_q = self.action_space.high_action_space[a]
+            act_data = (a, action_prob_np)
+
+        now_action = self.action_q[self.action_q_idx]
+        self.action_q_idx += 1
+
+        return now_action, act_data
 
     def neglect_invalid_actions(self, s, action_prob_np):
         """
@@ -300,7 +287,7 @@ class PPOAgent(Agent):
             enums.Action.GRAB_PULLING,
             enums.Action.GRAB_PULLING_HIGH,
             enums.Action.GRAB_PUMMEL,
-            enums.Action.GRAB_WAIT
+            enums.Action.GRAB_WAIT,
         ]:
             # if grabbing opponent, only hitting or throwing possible
             action_prob_np[3:8] = 0.0
@@ -314,7 +301,7 @@ class PPOAgent(Agent):
             enums.Action.EDGE_CATCHING,
             enums.Action.EDGE_HANGING,
             enums.Action.EDGE_TEETERING,
-            enums.Action.EDGE_TEETERING_START
+            enums.Action.EDGE_TEETERING_START,
         ]:
             # if grabbing edge now,
             # only jumping / rolling / moving possible
@@ -330,10 +317,7 @@ class PPOAgent(Agent):
                 # prevent suicide
                 action_prob_np[0] = 0.0
                 action_prob_np[24] = 0.0
-        if p1.action in [
-            enums.Action.LYING_GROUND_DOWN,
-            enums.Action.TECH_MISS_DOWN
-        ]:
+        if p1.action in [enums.Action.LYING_GROUND_DOWN, enums.Action.TECH_MISS_DOWN]:
             # when lying down,
             # only jumping / jab / rolling possible
             action_prob_np[0:2] = 0.0
@@ -372,7 +356,7 @@ class PPOAgent(Agent):
                 enums.Action.EDGE_CATCHING,
                 enums.Action.EDGE_HANGING,
                 enums.Action.EDGE_TEETERING,
-                enums.Action.EDGE_TEETERING_START
+                enums.Action.EDGE_TEETERING_START,
             ]:
                 action_prob_np[:20] = 0.0
                 if p1.position.x < -edge - 10:

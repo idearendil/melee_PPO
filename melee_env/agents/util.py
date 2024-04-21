@@ -66,19 +66,6 @@ class ObservationSpace:
         else:
             reward = 0
 
-        # if self.previous_gamestate is not None:
-        #     p1_stock_loss = int(self.previous_gamestate.players[1].stock) - int(
-        #         self.current_gamestate.players[1].stock
-        #     )
-        #     reward = p1_stock_loss
-        # else:
-        #     reward = 0
-
-        # reward = 1.0 if gamestate.players[1].off_stage else 0.0
-        # print(reward)
-
-        # reward = 1.0 if action == 0 else 0.0
-
         self.previous_gamestate = self.current_gamestate
 
         stocks = np.array(
@@ -86,7 +73,12 @@ class ObservationSpace:
         )
         done = not np.sum(stocks[np.argsort(stocks)][::-1][1:])
 
-        return (gamestate, np.array(self.previous_actions)), reward, done, info
+        return (
+            (gamestate, np.array(self.previous_actions)),
+            (reward, -reward),
+            done,
+            info,
+        )
 
     def reset(self):
         self.__init__()

@@ -29,7 +29,7 @@ class Ppo:
     The class which Proximal Policy Optimization is implemented in.
     """
 
-    def __init__(self, s_dim, a_dim, agent_id, opponent_id, device):
+    def __init__(self, s_dim, a_dim, device):
         self.device = device
         self.actor_net = Actor(s_dim, a_dim).to(self.device)
         self.critic_net = Critic(s_dim).to(self.device)
@@ -40,8 +40,6 @@ class Ppo:
         self.critic_loss_func = torch.nn.MSELoss()
         self.buffer = ReplayBuffer(BUFFER_SIZE)
         self.s_dim = s_dim
-        self.agent_id = agent_id
-        self.opponent_id = opponent_id
 
     def models_to_device(self, device):
         """
@@ -50,17 +48,17 @@ class Ppo:
         self.actor_net.to(device)
         self.critic_net.to(device)
 
-    def choose_action(self, s):
+    def choose_action(self, s, agent_id):
         """
         Convert state to preprocessed tensor,
         and then return action probability by actor_net
         """
-        s_ts1, s_ts2 = self.state_preprocessor(s)
+        s_ts1, s_ts2 = self.state_preprocessor(s, agent_id)
         s_ts1 = torch.from_numpy(s_ts1).unsqueeze(0).to(self.device)
         s_ts2 = torch.from_numpy(s_ts2).unsqueeze(0).to(self.device)
         return self.actor_net.choose_action((s_ts1, s_ts2))
 
-    def push_an_episode(self, data):
+    def push_an_episode(self, data, agent_id):
         """
         Push an episode to replay buffer.
 
@@ -81,7 +79,7 @@ class Ppo:
         s_lst1 = []
         s_lst2 = []
         for s in s_lst:
-            s1, s2 = self.state_preprocessor(s)
+            s1, s2 = self.state_preprocessor(s, agent_id)
             s_lst1.append(s1)
             s_lst2.append(s2)
 
@@ -109,6 +107,7 @@ class Ppo:
                     adv_ts[idx].item(),
                     ret_ts[idx].item(),
                     prob_lst[idx],
+                    agent_id,
                 )
             )
 
@@ -123,12 +122,14 @@ class Ppo:
         critic_loss_lst, actor_loss_lst = [], []
         for batch_id in range(BATCH_NUM):
 
-            s_lst, a_lst, adv_lst, ret_lst, op_lst = self.buffer.pull(BATCH_SIZE)
+            s_lst, a_lst, adv_lst, ret_lst, op_lst, id_lst = self.buffer.pull(
+                BATCH_SIZE
+            )
 
             s_lst1 = []
             s_lst2 = []
-            for s in s_lst:
-                s1, s2 = self.state_preprocessor(s)
+            for s, agent_id in zip(s_lst, id_lst):
+                s1, s2 = self.state_preprocessor(s, agent_id)
                 s_lst1.append(s1)
                 s_lst2.append(s2)
 
@@ -191,6 +192,7 @@ class Ppo:
         returns = torch.zeros_like(rewards)
         advants = torch.zeros_like(rewards)
         previous_value = 0
+        previous_reward = 0
         running_advants = 0
 
         for t in reversed(range(0, len(rewards))):
@@ -201,18 +203,19 @@ class Ppo:
                 running_tderror + GAMMA * LAMBDA * running_advants * masks[t]
             )
 
-            returns[t] = rewards[t] + GAMMA * previous_value * masks[t]
+            returns[t] = rewards[t] + GAMMA * previous_reward * masks[t]
             previous_value = values.data[t]
+            previous_reward = rewards.data[t]
             advants[t] = running_advants
-        # advants = (advants - advants.mean()) / advants.std()
+        advants = (advants - advants.mean()) / advants.std()
         return returns, advants
 
-    def state_preprocessor(self, s):
+    def state_preprocessor(self, s, agent_id):
 
         gamestate, previous_actions = s
 
-        p1 = gamestate.players[self.agent_id]
-        p2 = gamestate.players[self.opponent_id]
+        p1 = gamestate.players[agent_id]
+        p2 = gamestate.players[3 - agent_id]
 
         state1 = np.zeros((self.s_dim,), dtype=np.float32)
 

@@ -48,7 +48,8 @@ def run():
     # players = [PPOAgent(enums.Character.FOX, device), NOOP(enums.Character.FOX)]
     players = [
         PPOAgent(enums.Character.FOX, 1, 2, device, STATE_DIM, ACTION_DIM),
-        CPU(enums.Character.FOX, 5)]
+        CPU(enums.Character.FOX, 5),
+    ]
     # players = [NOOP(enums.Character.FOX), NOOP(enums.Character.FOX)]
 
     # normalizer = ObservationNormalizer(s_dim)
@@ -70,20 +71,12 @@ def run():
             env.start()
             now_s, _ = env.reset(enums.Stage.FINAL_DESTINATION)
 
-            action_q = []
-            action_q_idx = 0
             action_pair = [0, 0]
             for step_cnt in range(MAX_STEP):
                 if step_cnt > 100:
 
-                    if action_q_idx >= len(action_q):
-                        action_q_idx = 0
-                        a, _ = players[0].act(now_s)
-                        action_q = players[0].action_space.high_action_space[a]
-
-                    action_pair[0] = action_q[action_q_idx]
+                    action_pair[0], _ = players[0].act(now_s)
                     action_pair[1] = players[1].act(now_s[0])
-                    action_q_idx += 1
 
                     next_s, r, done, _ = env.step(*action_pair)
                     # next_state = normalizer(next_state)
@@ -93,9 +86,9 @@ def run():
 
                     if done:
                         if next_s[0].players[1].stock < next_s[0].players[2].stock:
-                            lose_rate[diff-1] += 1
+                            lose_rate[diff - 1] += 1
                         elif next_s[0].players[1].stock > next_s[0].players[2].stock:
-                            win_rate[diff-1] += 1
+                            win_rate[diff - 1] += 1
                         break
                 else:
                     action_pair = [0, 0]
@@ -107,6 +100,7 @@ def run():
 
     print(lose_rate)
     print(win_rate)
+
 
 if __name__ == "__main__":
     run()

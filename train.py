@@ -100,39 +100,37 @@ def run():
 
             r_sum = 0
             mask_sum = 1
-            action_q = []
-            action_q_idx = 0
+
             last_state_idx = -1
+
+            players[0].ppo.actor_net.eval()
             for step_cnt in range(MAX_STEP):
                 if step_cnt > 100:  # if step_cnt < 100, it's not started yet
 
-                    if action_q_idx >= len(action_q):
-                        # the agent should select action
-                        action_q_idx = 0
-                        a, a_prob = players[0].act(now_s)
-                        action_q = players[0].action_space.high_action_space[a]
-                        episode_buffer.append([now_s, a, a_prob, step_cnt])
-
-                    action_pair[0] = action_q[action_q_idx]
-                    action_q_idx += 1
+                    now_action, act_data = players[0].act(now_s)
+                    if act_data is not None:
+                        episode_buffer.append(
+                            [now_s, act_data[0], act_data[1], step_cnt, 1]
+                        )
+                    action_pair[0] = now_action
                     action_pair[1] = players[1].act(now_s[0])
 
                     now_s, r, done, _ = env.step(*action_pair)
                     mask = (1 - done) * 1
-                    score += r  # for log
+                    score += r[0]  # for log
 
-                    r_sum += r
+                    r_sum += r[0]
                     mask_sum *= mask
 
                     if done:
                         # if finished, add last information to episode memory
                         temp = episode_buffer[last_state_idx]
                         episode_memory.append(
-                            [temp[0], temp[1], r_sum, mask_sum, temp[2]]
+                            [temp[0], temp[1], r_sum, mask_sum, temp[2], temp[4]]
                         )
                         break
 
-                    elif now_s[0].players[1].action_frame == 1:
+                    if now_s[0].players[1].action_frame == 1:
                         # if agent's new action animation just started
                         p1_action = now_s[0].players[1].action
                         if p1_action in players[0].action_space.sensor:
@@ -151,7 +149,14 @@ def run():
                                         # save last action and its consequence in episode memory
                                         temp = episode_buffer[last_state_idx]
                                         episode_memory.append(
-                                            [temp[0], temp[1], r_sum, mask_sum, temp[2]]
+                                            [
+                                                temp[0],
+                                                temp[1],
+                                                r_sum,
+                                                mask_sum,
+                                                temp[2],
+                                                temp[4],
+                                            ]
                                         )
                                     r_sum = 0
                                     mask_sum = 1
@@ -167,7 +172,7 @@ def run():
 
             env.close()
 
-            players[0].ppo.push_an_episode(episode_memory)
+            players[0].ppo.push_an_episode(episode_memory, 1)
             print(
                 "episode:",
                 episode_id,
