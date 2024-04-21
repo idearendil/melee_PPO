@@ -120,13 +120,13 @@ def run():
                     now_action, act_data = pl_lst[0].act(now_s)
                     if act_data is not None:
                         episode_buffer1.append(
-                            [now_s, act_data[0], act_data[1], step_cnt, 1]
+                            [now_s, act_data[0], act_data[1], step_cnt]
                         )
                     action_pair[0] = now_action
                     now_action, act_data = pl_lst[1].act(now_s)
                     if act_data is not None:
                         episode_buffer2.append(
-                            [now_s, act_data[0], act_data[1], step_cnt, 2]
+                            [now_s, act_data[0], act_data[1], step_cnt]
                         )
                     action_pair[1] = now_action
 
@@ -143,11 +143,11 @@ def run():
                         # if finished, add last information to episode memory
                         temp = episode_buffer1[last_state_idx1]
                         episode_memory1.append(
-                            [temp[0], temp[1], r_sum1, mask_sum1, temp[2], temp[4]]
+                            [temp[0], temp[1], r_sum1, mask_sum1, temp[2]]
                         )
                         temp = episode_buffer2[last_state_idx2]
                         episode_memory2.append(
-                            [temp[0], temp[1], r_sum1, mask_sum1, temp[2], temp[4]]
+                            [temp[0], temp[1], r_sum1, mask_sum1, temp[2]]
                         )
                         break
 
@@ -178,7 +178,6 @@ def run():
                                                 r_sum1,
                                                 mask_sum1,
                                                 temp[2],
-                                                temp[4],
                                             ]
                                         )
                                     r_sum1 = 0
@@ -217,7 +216,6 @@ def run():
                                                 r_sum2,
                                                 mask_sum2,
                                                 temp[2],
-                                                temp[4],
                                             ]
                                         )
                                     r_sum2 = 0

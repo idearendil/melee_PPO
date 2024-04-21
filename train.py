@@ -110,7 +110,7 @@ def run():
                     now_action, act_data = players[0].act(now_s)
                     if act_data is not None:
                         episode_buffer.append(
-                            [now_s, act_data[0], act_data[1], step_cnt, 1]
+                            [now_s, act_data[0], act_data[1], step_cnt]
                         )
                     action_pair[0] = now_action
                     action_pair[1] = players[1].act(now_s[0])
@@ -126,7 +126,7 @@ def run():
                         # if finished, add last information to episode memory
                         temp = episode_buffer[last_state_idx]
                         episode_memory.append(
-                            [temp[0], temp[1], r_sum, mask_sum, temp[2], temp[4]]
+                            [temp[0], temp[1], r_sum, mask_sum, temp[2]]
                         )
                         break
 
@@ -149,14 +149,7 @@ def run():
                                         # save last action and its consequence in episode memory
                                         temp = episode_buffer[last_state_idx]
                                         episode_memory.append(
-                                            [
-                                                temp[0],
-                                                temp[1],
-                                                r_sum,
-                                                mask_sum,
-                                                temp[2],
-                                                temp[4],
-                                            ]
+                                            [temp[0], temp[1], r_sum, mask_sum, temp[2]]
                                         )
                                     r_sum = 0
                                     mask_sum = 1
