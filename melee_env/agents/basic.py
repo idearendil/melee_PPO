@@ -1,13 +1,18 @@
 from abc import ABC, abstractmethod
+import code
+import random
+import torch
 from melee import enums
 from melee.stages import EDGE_POSITION
 import numpy as np
-from melee_env.agents.util import *
-import code
+from melee_env.agents.util import (
+    ObservationSpace,
+    ActionSpace,
+    MyActionSpace,
+    from_observation_space,
+    from_action_space,
+)
 from PPO import Ppo
-import torch
-from parameters import TAU
-import random
 
 
 class Agent(ABC):

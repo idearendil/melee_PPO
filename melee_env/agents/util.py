@@ -13,7 +13,7 @@ class ObservationSpace:
         self.previous_actions.extend(((0, 0), (0, 0)) * 5)
 
     def __call__(self, gamestate, actions):
-        reward = 0
+        reward = (0, 0)
         info = None
         self.current_gamestate = gamestate
 
@@ -62,9 +62,9 @@ class ObservationSpace:
                 w_dmg * p2_dmg + w_shield * p2_shield_dmg + w_stock * p2_stock_loss
             )
 
-            reward = p2_loss - p1_loss
+            reward = (p2_loss * 2 - p1_loss, p1_loss * 2 - p2_loss)
         else:
-            reward = 0
+            reward = (0, 0)
 
         self.previous_gamestate = self.current_gamestate
 
@@ -75,7 +75,7 @@ class ObservationSpace:
 
         return (
             (gamestate, np.array(self.previous_actions)),
-            (reward, -reward),
+            reward,
             done,
             info,
         )
@@ -289,7 +289,7 @@ class MyActionSpace:
             Action.LOOPING_ATTACK_START: [8],
             # Action.LOOPING_ATTACK_MIDDLE: [8],
             # Action.LOOPING_ATTACK_END: [8],
-            Action.NAIR: [8],
+            Action.NAIR: [8, 13, 14, 15, 16],
             # Action.NAIR_LANDING: [8],
             Action.DASH_ATTACK: [8],
             Action.FSMASH_MID: [9, 10],

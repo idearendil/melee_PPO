@@ -76,7 +76,7 @@ def run():
                 next_s, r, done, _ = env.step(*action_pair)
                 # next_state = normalizer(next_state)
 
-                score += r
+                score += r[0]
                 now_s = next_s
 
                 if done:

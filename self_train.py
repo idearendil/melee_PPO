@@ -42,6 +42,13 @@ parser.add_argument(
     default="../ssbm.iso",
     help="Path to your NTSC 1.02/PAL SSBM Melee ISO",
 )
+parser.add_argument(
+    "--print_fuck",
+    type=bool,
+    default=False,
+    help="Whether to print logs to catch fucked up animations",
+)
+
 args = parser.parse_args()
 
 
@@ -122,6 +129,13 @@ def run():
                         episode_buffer1.append(
                             [now_s, act_data[0], act_data[1], step_cnt]
                         )
+                        if args.print_fuck:
+                            print(
+                                "buffer index:",
+                                len(episode_buffer1) - 1,
+                                " / input action:",
+                                act_data[0],
+                            )
                     action_pair[0] = now_action
                     now_action, act_data = pl_lst[1].act(now_s)
                     if act_data is not None:
@@ -187,6 +201,13 @@ def run():
                                     break
 
                             if not action_is_found:
+                                if args.print_fuck:
+                                    print(
+                                        "last_state_idx1:",
+                                        last_state_idx1,
+                                        " / animation:",
+                                        p1_action,
+                                    )
                                 fucked_up_cnt += 1
 
                     if now_s[0].players[2].action_frame == 1:

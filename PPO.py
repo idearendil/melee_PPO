@@ -207,7 +207,7 @@ class Ppo:
             previous_value = values.data[t]
             previous_reward = rewards.data[t]
             advants[t] = running_advants
-        advants = (advants - advants.mean()) / advants.std()
+        # advants = (advants - advants.mean()) / advants.std()
         return returns, advants
 
     def state_preprocessor(self, s, agent_id):
