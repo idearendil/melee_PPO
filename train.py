@@ -74,6 +74,7 @@ def run():
     episode_id = 0
     if args.continue_training:
         # load pre-trained models
+        print("continue training from the latest models...")
         players[0].ppo.actor_net = torch.load(args.model_path + "actor_net.pt").to(
             device
         )
