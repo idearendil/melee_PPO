@@ -4,6 +4,7 @@ Testing saved models within within melee environment.
 
 import argparse
 import torch
+from pynput.keyboard import Key, Controller
 import numpy as np
 from melee import enums
 from parameters import MAX_STEP, STATE_DIM, ACTION_DIM
@@ -28,6 +29,12 @@ parser.add_argument(
     type=str,
     default="../ssbm.iso",
     help="Path to your NTSC 1.02/PAL SSBM Melee ISO",
+)
+parser.add_argument(
+    "--fastforward",
+    type=int,
+    default=1,
+    help="whether to turn up fastforward",
 )
 args = parser.parse_args()
 
@@ -69,6 +76,8 @@ def run():
 
             env = MeleeEnv(args.iso, players, fast_forward=True)
             env.start()
+            if args.fastforward:
+                Controller().press(Key.tab)
             now_s, _ = env.reset(enums.Stage.FINAL_DESTINATION)
 
             action_pair = [0, 0]
@@ -95,6 +104,8 @@ def run():
                     now_s, _, _, _ = env.step(*action_pair)
 
             env.close()
+            if args.fastforward:
+                Controller().release(Key.tab)
 
             print("episode: ", episode_id, "\tscore: ", score)
 

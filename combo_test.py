@@ -1,4 +1,5 @@
 from melee import enums
+from melee.stages import EDGE_POSITION
 from melee_env.myenv import MeleeEnv
 from melee_env.agents.basic import NOOP
 import argparse
@@ -22,8 +23,8 @@ env.start()
 # action_buffer = deque(maxlen=3)
 # action_sequence = [1] + [0] * 10 + [19] + [0] * 40 + [4]
 # action_sequence = [3] + [0] * 50 + [19] + [0] * 40 + [3] + [0] * 50 + [43]
-action_sequence = [3, 0, 9]
-action_sequence2 = [0] * 100
+action_sequence = [3] * 15 + [0] * 50 + [19] + [0] * 40 + [3]
+action_sequence2 = [1, 1, 1] + [0] * 10 + [25]
 if len(action_sequence) > len(action_sequence2):
     action_sequence2.extend([0] * (len(action_sequence) - len(action_sequence2)))
 else:
@@ -50,7 +51,14 @@ for step_cnt in range(300):
             "/ action frame:",
             next_obs[0].players[1].action_frame,
         )
-        print("player x: ", next_obs[0].players[1].x)
+        print(
+            "player x:",
+            next_obs[0].players[1].x,
+            " / player y:",
+            next_obs[0].players[1].y,
+            " / jumps left:",
+            next_obs[0].players[1].jumps_left,
+        )
     else:
         action_pair = [0, 0]
         next_obs, r, done, _ = env.step(*action_pair)

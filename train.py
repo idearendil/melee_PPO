@@ -3,7 +3,10 @@ Start training models by PPO method within melee environment.
 """
 
 import argparse
+import random
 import torch
+from pynput.keyboard import Key, Controller
+import time
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -20,7 +23,6 @@ from parameters import (
 # from observation_normalizer import ObservationNormalizer
 from melee_env.myenv import MeleeEnv
 from melee_env.agents.basic import PPOAgent, NOOP, CPU
-import random
 
 
 parser = argparse.ArgumentParser()
@@ -41,6 +43,12 @@ parser.add_argument(
     type=str,
     default="../ssbm.iso",
     help="Path to your NTSC 1.02/PAL SSBM Melee ISO",
+)
+parser.add_argument(
+    "--fastforward",
+    type=int,
+    default=1,
+    help="whether to turn up fastforward",
 )
 args = parser.parse_args()
 
@@ -91,6 +99,8 @@ def run():
 
             env = MeleeEnv(args.iso, players, fast_forward=True)
             env.start()
+            if args.fastforward:
+                Controller().press(Key.tab)
             now_s, _ = env.reset(enums.Stage.FINAL_DESTINATION)
 
             episode_memory = []
@@ -130,7 +140,10 @@ def run():
                         )
                         break
 
-                    if now_s[0].players[1].action_frame == 1:
+                    if (
+                        now_s[0].players[1].action_frame == 1
+                        and now_s[0].players[1].position.y >= 0
+                    ):
                         # if agent's new action animation just started
                         p1_action = now_s[0].players[1].action
                         if p1_action in players[0].action_space.sensor:
@@ -164,6 +177,8 @@ def run():
                     now_s, _, _, _ = env.step(*action_pair)
 
             env.close()
+            if args.fastforward:
+                Controller().release(Key.tab)
 
             players[0].ppo.push_an_episode(episode_memory, 1)
             print(

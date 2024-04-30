@@ -191,7 +191,7 @@ class PPOAgent(Agent):
         s_dim,
         a_dim,
         test_mode=False,
-        auto_fire=False,
+        auto_fire=True,
     ):
         super().__init__()
         self.character = character
@@ -211,37 +211,82 @@ class PPOAgent(Agent):
         self.action_q = []
         self.action_q_idx = 0
 
+        self.auto_fire = auto_fire
+        self.requested_emergency_action = False
+
     def act(self, s):
 
         act_data = None
 
         if self.action_q_idx >= len(self.action_q):
-            # the agent should select action
+            # the agent should select a new action
             self.action_q_idx = 0
 
-            action_prob_np = self.ppo.choose_action(s, self.agent_id)
+            if self.auto_fire and s[0].players[self.agent_id].off_stage:
+                # the agent will proceed emergency actions
+                p1 = s[0].players[self.agent_id]
+                edge = EDGE_POSITION.get(s[0].stage)
 
-            if self.test_mode:
-                # choose the most probable action
-                final_weights = self.neglect_invalid_actions(s[0], action_prob_np)
-                a = torch.argmax(final_weights).item()
+                if self.requested_emergency_action:
+                    self.requested_emergency_action = False
+                    self.action_q = [0]
+                elif p1.jumps_left == 0:
+                    if p1.action in [
+                        enums.Action.SWORD_DANCE_3_MID,
+                        enums.Action.SWORD_DANCE_3_LOW,
+                        enums.Action.SWORD_DANCE_3_HIGH,
+                        enums.Action.SWORD_DANCE_3_LOW_AIR,
+                        enums.Action.SWORD_DANCE_3_MID_AIR,
+                        enums.Action.SWORD_DANCE_3_HIGH_AIR,
+                        enums.Action.SWORD_DANCE_4_LOW,
+                        enums.Action.SWORD_DANCE_4_MID,
+                        enums.Action.SWORD_DANCE_4_HIGH,
+                    ]:
+                        if p1.action_frame == 39:
+                            if p1.position.x < -edge - 5:
+                                self.action_q = [5]
+                            elif p1.position.x > edge + 5:
+                                self.action_q = [6]
+                            else:
+                                self.action_q = [3]
+                        else:
+                            self.action_q = [0]
+                    else:
+                        if p1.position.y < -5:
+                            self.action_q = [21]
+                            self.requested_emergency_action = True
+                        else:
+                            if p1.position.x < 0:
+                                self.action_q = [1]
+                            else:
+                                self.action_q = [2]
+                else:
+                    self.action_q = [3, 3, 3, 0]
             else:
-                # choose an action with probability weights
-                # max_weight = np.max(action_prob_np)
-                # exp_weights = np.exp((action_prob_np - max_weight) / TAU)
-                # exp_weights = self.neglect_invalid_actions(s[0], exp_weights)
-                # final_weights = exp_weights / np.sum(exp_weights)
-                # a = random.choices(
-                #     list(range(self.a_dim)), weights=final_weights, k=1)[0]
-                final_weights = np.empty_like(action_prob_np)
-                final_weights[:] = action_prob_np
-                final_weights = self.neglect_invalid_actions(s[0], final_weights)
-                final_weights = final_weights / np.sum(final_weights)
-                a = random.choices(list(range(self.a_dim)), weights=final_weights, k=1)[
-                    0
-                ]
-            self.action_q = self.action_space.high_action_space[a]
-            act_data = (a, action_prob_np)
+                self.requested_emergency_action = False
+                action_prob_np = self.ppo.choose_action(s, self.agent_id)
+
+                if self.test_mode:
+                    # choose the most probable action
+                    final_weights = self.neglect_invalid_actions(s[0], action_prob_np)
+                    a = torch.argmax(final_weights).item()
+                else:
+                    # choose an action with probability weights
+                    # max_weight = np.max(action_prob_np)
+                    # exp_weights = np.exp((action_prob_np - max_weight) / TAU)
+                    # exp_weights = self.neglect_invalid_actions(s[0], exp_weights)
+                    # final_weights = exp_weights / np.sum(exp_weights)
+                    # a = random.choices(
+                    #     list(range(self.a_dim)), weights=final_weights, k=1)[0]
+                    final_weights = np.empty_like(action_prob_np)
+                    final_weights[:] = action_prob_np
+                    final_weights = self.neglect_invalid_actions(s[0], final_weights)
+                    final_weights = final_weights / np.sum(final_weights)
+                    a = random.choices(
+                        list(range(self.a_dim)), weights=final_weights, k=1
+                    )[0]
+                self.action_q = self.action_space.high_action_space[a]
+                act_data = (a, action_prob_np)
 
         now_action = self.action_q[self.action_q_idx]
         self.action_q_idx += 1
@@ -274,18 +319,23 @@ class PPOAgent(Agent):
             enums.Action.SWORD_DANCE_4_MID,
             enums.Action.SWORD_DANCE_4_HIGH,
         ]:
-            # if currently firefoxing, only tilting stick possible
-            action_prob_np[:30] = 0.0
-            if p1.position.x > 0:
-                # prevent suicide
-                action_prob_np[30] = 0.0
-                action_prob_np[34] = 0.0
-                action_prob_np[36] = 0.0
+            # if currently firefoxing,
+            # only tilting stick possible at important moment
+            if p1.action_frame == 38 or p1.action_frame == 39:
+                action_prob_np[:30] = 0.0
+                if p1.position.x > 0:
+                    # prevent suicide
+                    action_prob_np[30] = 0.0
+                    action_prob_np[34] = 0.0
+                    action_prob_np[36] = 0.0
+                else:
+                    # prevent suicide
+                    action_prob_np[31] = 0.0
+                    action_prob_np[35] = 0.0
+                    action_prob_np[37] = 0.0
             else:
-                # prevent suicide
-                action_prob_np[31] = 0.0
-                action_prob_np[35] = 0.0
-                action_prob_np[37] = 0.0
+                action_prob_np[:] = 0.0
+                action_prob_np[2] = 1.0
         elif p1.action in [
             enums.Action.GRAB,
             enums.Action.GRAB_PULL,
@@ -355,23 +405,5 @@ class PPOAgent(Agent):
             # prevent suicide
             action_prob_np[0] = 0.0
             action_prob_np[30] = 0.0
-        if p1.position.y < -10:
-            # emergency!!! only firefoxing allowed
-            if p1.action not in [
-                enums.Action.EDGE_CATCHING,
-                enums.Action.EDGE_HANGING,
-                enums.Action.EDGE_TEETERING,
-                enums.Action.EDGE_TEETERING_START,
-            ]:
-                action_prob_np[:20] = 0.0
-                if p1.position.x < -edge - 10:
-                    action_prob_np[21:34] = 0.0
-                    action_prob_np[35:] = 0.0
-                elif p1.position.x > edge + 10:
-                    action_prob_np[21:35] = 0.0
-                    action_prob_np[36:] = 0.0
-                else:
-                    action_prob_np[21:32] = 0.0
-                    action_prob_np[33:] = 0.0
 
         return action_prob_np

@@ -43,6 +43,9 @@ class ObservationSpace:
                 self.current_gamestate.players[2].stock
             )
 
+            p1_stock_loss *= abs(200 - self.current_gamestate.players[1].percent) / 200
+            p2_stock_loss *= abs(200 - self.current_gamestate.players[2].percent) / 200
+
             p1_dmg = max(p1_dmg, 0)
             p2_dmg = max(p2_dmg, 0)
             if p1_stock_loss > 1:
@@ -54,7 +57,7 @@ class ObservationSpace:
             p1_shield_dmg = max(p1_shield_dmg, 0)
             p2_shield_dmg = max(p2_shield_dmg, 0)
 
-            w_dmg, w_shield, w_stock = 0.1, 0.3, 5
+            w_dmg, w_shield, w_stock = 0.1, 0.3, 8
             p1_loss = (
                 w_dmg * p1_dmg + w_shield * p1_shield_dmg + w_stock * p1_stock_loss
             )
@@ -62,7 +65,7 @@ class ObservationSpace:
                 w_dmg * p2_dmg + w_shield * p2_shield_dmg + w_stock * p2_stock_loss
             )
 
-            reward = (p2_loss * 2 - p1_loss, p1_loss * 2 - p2_loss)
+            reward = (p2_loss - p1_loss, p1_loss - p2_loss)
         else:
             reward = (0, 0)
 
