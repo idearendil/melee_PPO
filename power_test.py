@@ -1,5 +1,5 @@
 """
-Testing saved models within within melee environment.
+Testing saved models within melee environment.
 """
 
 import argparse
