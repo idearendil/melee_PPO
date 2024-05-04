@@ -27,16 +27,13 @@ from melee_env.agents.basic import PPOAgent, NOOP, CPU
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--env_name", type=str, default="melee", help="name of environement"
-)
-parser.add_argument(
     "--continue_training",
     type=bool,
     default=False,
     help="whether to continue training with existing models",
 )
 parser.add_argument(
-    "--model_path", type=str, default="./models/", help="where models are saved"
+    "--model_path", type=str, default="./models_train/", help="where models are saved"
 )
 parser.add_argument(
     "--iso",
@@ -81,11 +78,11 @@ def run():
         players[0].ppo.critic_net = torch.load(args.model_path + "critic_net.pt").to(
             device
         )
-        df = pd.read_csv("log_melee.csv")
+        df = pd.read_csv("log_train.csv")
         episode_id = len(df) - 1
     else:
         # clear log file
-        with open("log_" + args.env_name + ".csv", "w", encoding="utf-8") as outfile:
+        with open("log_train.csv", "w", encoding="utf-8") as outfile:
             outfile.write("episode_id,score\n")
 
     for cycle_id in range(CYCLE_NUM):
@@ -191,20 +188,17 @@ def run():
                 fucked_up_cnt,
             )
 
-            with open(
-                "log_" + args.env_name + ".csv", "a", encoding="utf-8"
-            ) as outfile:
+            with open("log_train.csv", "a", encoding="utf-8") as outfile:
                 outfile.write(str(episode_id) + "," + str(score) + "\n")
             scores.append(score)
 
-        score_avg = np.mean(scores)
-        print("cycle: ", cycle_id, "\tepisode: ", episode_id, "\tscore: ", score_avg)
+        print("cycle: ", cycle_id, "\tscore: ", np.mean(scores))
 
         players[0].ppo.train()
         torch.save(players[0].ppo.actor_net, args.model_path + "actor_net.pt")
         torch.save(players[0].ppo.critic_net, args.model_path + "critic_net.pt")
 
-    log_df = pd.read_csv("log_" + args.env_name + ".csv")
+    log_df = pd.read_csv("log_train.csv")
     plt.plot(log_df["episode_id"], log_df["score"])
     plt.show()
 

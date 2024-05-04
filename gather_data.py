@@ -21,16 +21,7 @@ from melee_env.agents.basic import PPOAgent
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--env_name", type=str, default="melee", help="name of environement"
-)
-parser.add_argument(
-    "--continue_training",
-    type=bool,
-    default=False,
-    help="whether to continue training with existing models",
-)
-parser.add_argument(
-    "--model_path", type=str, default="./models/", help="where models are saved"
+    "--model_path", type=str, default="./models_train/", help="where models are saved"
 )
 parser.add_argument(
     "--iso",
@@ -68,12 +59,12 @@ def run():
         PPOAgent(enums.Character.FOX, 2, 1, device, STATE_DIM, ACTION_DIM),
     ]
 
-    players[0].ppo.actor_net = torch.load(args.model_path + "actor_net.pt")
-    players[0].ppo.critic_net = torch.load(args.model_path + "critic_net.pt")
-    players[1].ppo.actor_net = torch.load(args.model_path + "actor_net.pt")
-    players[1].ppo.critic_net = torch.load(args.model_path + "critic_net.pt")
+    players[0].ppo.actor_net = torch.load(args.model_path + "actor_net_last.pt")
+    players[0].ppo.critic_net = torch.load(args.model_path + "critic_net_last.pt")
+    players[1].ppo.actor_net = torch.load(args.model_path + "actor_net_last.pt")
+    players[1].ppo.critic_net = torch.load(args.model_path + "critic_net_last.pt")
 
-    for episode_id in range(1221, args.episode_num):
+    for episode_id in range(1936, args.episode_num):
         players[0].ppo.buffer.buffer.clear()
 
         score = 0
