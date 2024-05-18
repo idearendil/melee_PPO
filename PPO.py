@@ -18,7 +18,7 @@ from parameters import (
     BUFFER_SIZE,
     BATCH_NUM,
     ENTROPY_WEIGHT,
-    DELAY,
+    PRE_STATES_NUM,
 )
 from replay_buffer import ReplayBuffer
 from math import log
@@ -31,8 +31,8 @@ class Ppo:
 
     def __init__(self, s_dim, a_dim, device):
         self.device = device
-        self.actor_net = Actor(s_dim, a_dim).to(self.device)
-        self.critic_net = Critic(s_dim).to(self.device)
+        self.actor_net = Actor(s_dim * (PRE_STATES_NUM + 1), a_dim).to(self.device)
+        self.critic_net = Critic(s_dim * (PRE_STATES_NUM + 1)).to(self.device)
         self.actor_optim = optim.Adam(self.actor_net.parameters(), lr=LR_ACTOR)
         self.critic_optim = optim.Adam(
             self.critic_net.parameters(), lr=LR_CRITIC, weight_decay=L2_RATE
@@ -212,55 +212,66 @@ class Ppo:
 
     def state_preprocessor(self, s, agent_id):
 
-        gamestate, previous_actions = s
+        gamestate, previous_states = s
 
-        p1 = gamestate.players[agent_id]
-        p2 = gamestate.players[3 - agent_id]
+        state1 = np.zeros((self.s_dim * (PRE_STATES_NUM + 1),), dtype=np.float32)
 
-        state1 = np.zeros((self.s_dim,), dtype=np.float32)
+        for state_id in range(PRE_STATES_NUM + 1):
+            if state_id == 0:
+                p1 = gamestate.players[agent_id]
+                p2 = gamestate.players[3 - agent_id]
+            else:
+                p1 = previous_states[state_id - 1].players[agent_id]
+                p2 = previous_states[state_id - 1].players[3 - agent_id]
 
-        state1[0] = p1.position.x
-        state1[1] = p1.position.y
-        state1[2] = p2.position.x
-        state1[3] = p2.position.y
-        state1[4] = p1.position.x - p2.position.x
-        state1[5] = p1.position.y - p2.position.y
-        state1[6] = 1.0 if p1.facing else -1.0
-        state1[7] = 1.0 if p2.facing else -1.0
-        state1[8] = 1.0 if (p1.position.x - p2.position.x) * state1[6] < 0 else -1.0
-        state1[9] = log(abs(p1.position.x - p2.position.x) + 1)
-        state1[10] = log(abs(p1.position.y - p2.position.y) + 1)
-        state1[11] = p1.hitstun_frames_left
-        state1[12] = p2.hitstun_frames_left
-        state1[13] = p1.invulnerability_left
-        state1[14] = p2.invulnerability_left
-        state1[15] = p1.jumps_left
-        state1[16] = p2.jumps_left
-        state1[17] = p1.off_stage * 1.0
-        state1[18] = p2.off_stage * 1.0
-        state1[19] = p1.on_ground * 1.0
-        state1[20] = p2.on_ground * 1.0
-        state1[21] = p1.percent
-        state1[22] = p2.percent
-        state1[23] = p1.shield_strength
-        state1[24] = p2.shield_strength
-        state1[25] = p1.speed_air_x_self
-        state1[26] = p2.speed_air_x_self
-        state1[27] = p1.speed_ground_x_self
-        state1[28] = p2.speed_ground_x_self
-        state1[29] = p1.speed_x_attack
-        state1[30] = p2.speed_x_attack
-        state1[31] = p1.speed_y_attack
-        state1[32] = p2.speed_y_attack
-        state1[33] = p1.speed_y_self
-        state1[34] = p2.speed_y_self
-        state1[35] = p1.action_frame
-        state1[36] = p2.action_frame
-        if p1.action.value < 386:
-            state1[37 + p1.action.value] = 1.0
-        if p2.action.value < 386:
-            state1[37 + 386 + p2.action.value] = 1.0
+            state1[self.s_dim * state_id + 0] = p1.position.x
+            state1[self.s_dim * state_id + 1] = p1.position.y
+            state1[self.s_dim * state_id + 2] = p2.position.x
+            state1[self.s_dim * state_id + 3] = p2.position.y
+            state1[self.s_dim * state_id + 4] = p1.position.x - p2.position.x
+            state1[self.s_dim * state_id + 5] = p1.position.y - p2.position.y
+            state1[self.s_dim * state_id + 6] = 1.0 if p1.facing else -1.0
+            state1[self.s_dim * state_id + 7] = 1.0 if p2.facing else -1.0
+            state1[self.s_dim * state_id + 8] = (
+                1.0 if (p1.position.x - p2.position.x) * state1[6] < 0 else -1.0
+            )
+            state1[self.s_dim * state_id + 9] = log(
+                abs(p1.position.x - p2.position.x) + 1
+            )
+            state1[self.s_dim * state_id + 10] = log(
+                abs(p1.position.y - p2.position.y) + 1
+            )
+            state1[self.s_dim * state_id + 11] = p1.hitstun_frames_left
+            state1[self.s_dim * state_id + 12] = p2.hitstun_frames_left
+            state1[self.s_dim * state_id + 13] = p1.invulnerability_left
+            state1[self.s_dim * state_id + 14] = p2.invulnerability_left
+            state1[self.s_dim * state_id + 15] = p1.jumps_left
+            state1[self.s_dim * state_id + 16] = p2.jumps_left
+            state1[self.s_dim * state_id + 17] = p1.off_stage * 1.0
+            state1[self.s_dim * state_id + 18] = p2.off_stage * 1.0
+            state1[self.s_dim * state_id + 19] = p1.on_ground * 1.0
+            state1[self.s_dim * state_id + 20] = p2.on_ground * 1.0
+            state1[self.s_dim * state_id + 21] = p1.percent
+            state1[self.s_dim * state_id + 22] = p2.percent
+            state1[self.s_dim * state_id + 23] = p1.shield_strength
+            state1[self.s_dim * state_id + 24] = p2.shield_strength
+            state1[self.s_dim * state_id + 25] = p1.speed_air_x_self
+            state1[self.s_dim * state_id + 26] = p2.speed_air_x_self
+            state1[self.s_dim * state_id + 27] = p1.speed_ground_x_self
+            state1[self.s_dim * state_id + 28] = p2.speed_ground_x_self
+            state1[self.s_dim * state_id + 29] = p1.speed_x_attack
+            state1[self.s_dim * state_id + 30] = p2.speed_x_attack
+            state1[self.s_dim * state_id + 31] = p1.speed_y_attack
+            state1[self.s_dim * state_id + 32] = p2.speed_y_attack
+            state1[self.s_dim * state_id + 33] = p1.speed_y_self
+            state1[self.s_dim * state_id + 34] = p2.speed_y_self
+            state1[self.s_dim * state_id + 35] = p1.action_frame
+            state1[self.s_dim * state_id + 36] = p2.action_frame
+            if p1.action.value < 386:
+                state1[self.s_dim * state_id + 37 + p1.action.value] = 1.0
+            if p2.action.value < 386:
+                state1[self.s_dim * state_id + 37 + 386 + p2.action.value] = 1.0
 
-        state2 = np.zeros((1,), dtype=np.float32)
+        state2 = np.zeros((1,), dtype=np.float32)  # not using this one yet
 
         return (state1, state2)

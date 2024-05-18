@@ -17,11 +17,11 @@ class Actor(nn.Module):
 
     def __init__(self, s_dim, a_dim):
         super(Actor, self).__init__()
-        self.fc1 = nn.Linear(s_dim, 256)
-        self.fc2 = nn.Linear(256, 256)
+        self.fc1 = nn.Linear(s_dim, 512)
+        self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, 128)
         self.fc4 = nn.Linear(128, a_dim)
-        self.bn1d_1 = nn.BatchNorm1d(256)
+        self.bn1d_1 = nn.BatchNorm1d(512)
         self.bn1d_2 = nn.BatchNorm1d(256)
         self.bn1d_3 = nn.BatchNorm1d(128)
         self.a_dim = a_dim
@@ -68,11 +68,11 @@ class Critic(nn.Module):
 
     def __init__(self, s_dim):
         super(Critic, self).__init__()
-        self.fc1 = nn.Linear(s_dim, 256)
-        self.fc2 = nn.Linear(256, 256)
+        self.fc1 = nn.Linear(s_dim, 512)
+        self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, 128)
         self.fc4 = nn.Linear(128, 1)
-        self.bn1d_1 = nn.BatchNorm1d(256)
+        self.bn1d_1 = nn.BatchNorm1d(512)
         self.bn1d_2 = nn.BatchNorm1d(256)
         self.bn1d_3 = nn.BatchNorm1d(128)
         self.activ = nn.ELU()

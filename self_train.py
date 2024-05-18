@@ -109,7 +109,6 @@ def pick_opponent(league_win_rate, device):
     opp_id = random.choices(list(range(len(league_win_rate))), weights=pick_prob, k=1)[
         0
     ]
-    opp_id = 3
 
     if opp_id < 3:
         return opp_id, CPU(enums.Character.FOX, 7 + opp_id)

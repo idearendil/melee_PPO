@@ -2,22 +2,20 @@ import numpy as np
 import melee
 from melee.enums import Action
 from collections import deque
-from parameters import ACTION_DIM
+from parameters import PRE_STATES_NUM
 
 
 class ObservationSpace:
     def __init__(self):
         self.previous_gamestate = None
         self.current_gamestate = None
-        self.previous_actions = deque(maxlen=10)
-        self.previous_actions.extend(((0, 0), (0, 0)) * 5)
+        self.previous_gamestates = deque(maxlen=PRE_STATES_NUM)
+        self.previous_gamestates.extend([None] * PRE_STATES_NUM)
 
     def __call__(self, gamestate, actions):
         reward = (0, 0)
         info = None
         self.current_gamestate = gamestate
-
-        self.previous_actions.append((actions[0], actions[1]))
 
         if self.previous_gamestate is not None:
             p1_dmg = (
@@ -69,6 +67,16 @@ class ObservationSpace:
         else:
             reward = (0, 0)
 
+        additional_info = []
+        if self.previous_gamestates[-1] is None:
+            self.previous_gamestates.append(self.current_gamestate)
+        for i in range(PRE_STATES_NUM - 1, -1, -1):
+            if self.previous_gamestates[i] is not None:
+                additional_info.append(self.previous_gamestates[i])
+            else:
+                additional_info.append(self.previous_gamestates[i + 1])
+
+        self.previous_gamestates.append(self.current_gamestate)
         self.previous_gamestate = self.current_gamestate
 
         stocks = np.array(
@@ -77,7 +85,7 @@ class ObservationSpace:
         done = not np.sum(stocks[np.argsort(stocks)][::-1][1:])
 
         return (
-            (gamestate, np.array(self.previous_actions)),
+            (gamestate, additional_info),
             reward,
             done,
             info,
