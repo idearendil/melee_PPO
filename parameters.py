@@ -3,7 +3,7 @@ The file of hyperparameters.
 """
 
 LR_ACTOR = 0.0001
-ENTROPY_WEIGHT = 0.0001
+ENTROPY_WEIGHT = 0  # 0.0001
 LR_CRITIC = 0.0001
 CYCLE_NUM = 5000
 MAX_STEP = 18000

@@ -268,8 +268,10 @@ class PPOAgent(Agent):
 
                 if self.test_mode:
                     # choose the most probable action
-                    final_weights = self.neglect_invalid_actions(s[0], action_prob_np)
-                    a = torch.argmax(final_weights).item()
+                    final_weights = np.empty_like(action_prob_np)
+                    final_weights[:] = action_prob_np
+                    final_weights = self.neglect_invalid_actions(s[0], final_weights)
+                    a = np.argmax(final_weights)
                 else:
                     # choose an action with probability weights
                     # max_weight = np.max(action_prob_np)

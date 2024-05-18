@@ -69,13 +69,12 @@ def pick_opponent(league_win_rate, device):
     pick_prob = pick_prob / np.sum(pick_prob)
 
     # print info
-    print("\t [win rate]\t [pick prob]")
+    print("\t[win rate]\t\t [pick prob]")
     if sum(league_win_rate[0]) <= 0.0:
         print("CPU 7:\t", "?", "\t\t", pick_prob[0])
     else:
         print(
-            "CPU 7:\t",
-            league_win_rate[0][0] / sum(league_win_rate[0]),
+            f"CPU 7:\t{(league_win_rate[0][0] / sum(league_win_rate[0])):.6f}",
             "\t\t",
             pick_prob[0],
         )
@@ -83,8 +82,7 @@ def pick_opponent(league_win_rate, device):
         print("CPU 8:\t", "?", "\t\t", pick_prob[1])
     else:
         print(
-            "CPU 8:\t",
-            league_win_rate[1][0] / sum(league_win_rate[1]),
+            f"CPU 8:\t{(league_win_rate[1][0] / sum(league_win_rate[1])):.6f}",
             "\t\t",
             pick_prob[1],
         )
@@ -92,20 +90,17 @@ def pick_opponent(league_win_rate, device):
         print("CPU 9:\t", "?", "\t\t", pick_prob[2])
     else:
         print(
-            "CPU 9:\t",
-            league_win_rate[2][0] / sum(league_win_rate[2]),
+            f"CPU 9:\t{(league_win_rate[2][0] / sum(league_win_rate[2])):.6f}",
             "\t\t",
             pick_prob[2],
         )
     for i in range(3, len(league_win_rate)):
         if sum(league_win_rate[i]) <= 0.0:
-            print("Agent", i - 3, ":\t", "?", "\t\t", pick_prob[i])
+            print(f"Agent{i - 3}:", "?       ", "\t\t", pick_prob[i])
         else:
             print(
-                "Agent",
-                i - 3,
-                ":\t",
-                league_win_rate[i][0] / sum(league_win_rate[i]),
+                f"Agent{i-3}:",
+                f"{(league_win_rate[i][0] / sum(league_win_rate[i])):.6f}",
                 "\t\t",
                 pick_prob[i],
             )
@@ -114,11 +109,14 @@ def pick_opponent(league_win_rate, device):
     opp_id = random.choices(list(range(len(league_win_rate))), weights=pick_prob, k=1)[
         0
     ]
+    opp_id = 3
 
     if opp_id < 3:
         return opp_id, CPU(enums.Character.FOX, 7 + opp_id)
 
-    opp = PPOAgent(enums.Character.FOX, 2, 1, device, STATE_DIM, ACTION_DIM)
+    opp = PPOAgent(
+        enums.Character.FOX, 2, 1, device, STATE_DIM, ACTION_DIM, test_mode=True
+    )
     opp.ppo.actor_net = torch.load(
         args.model_path + "actor_net_" + str(opp_id - 3) + ".pt"
     ).to(device)
@@ -343,7 +341,7 @@ def run():
         # check if the win rate satisfies agent-releasing condition.
         agent_release_flag = True
         for a_win_rate in league_win_rate:
-            if a_win_rate[0] / sum(a_win_rate) < 0.5:
+            if a_win_rate[0] / sum(a_win_rate) < 0.6:
                 agent_release_flag = False
             a_win_rate[0] *= WIN_RATE_DECAY
             a_win_rate[1] *= WIN_RATE_DECAY

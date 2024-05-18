@@ -64,7 +64,7 @@ def run():
     players[1].ppo.actor_net = torch.load(args.model_path + "actor_net_last.pt")
     players[1].ppo.critic_net = torch.load(args.model_path + "critic_net_last.pt")
 
-    for episode_id in range(1936, args.episode_num):
+    for episode_id in range(3191, args.episode_num):
         players[0].ppo.buffer.buffer.clear()
 
         score = 0

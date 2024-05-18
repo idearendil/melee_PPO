@@ -18,7 +18,10 @@ parser.add_argument(
     "--env_name", type=str, default="melee", help="name of environement"
 )
 parser.add_argument(
-    "--model_path", type=str, default="./models/", help="where models are saved"
+    "--model_path",
+    type=str,
+    default="./models_self_train/",
+    help="where models are saved",
 )
 parser.add_argument(
     "--episode_num", type=int, default=10, help="How many times to test"
@@ -48,15 +51,17 @@ def run():
     # players = [PPOAgent(enums.Character.FOX, device), NOOP(enums.Character.FOX)]
     players = [
         PPOAgent(enums.Character.FOX, 1, 2, device, STATE_DIM, ACTION_DIM),
-        PPOAgent(enums.Character.FOX, 2, 1, device, STATE_DIM, ACTION_DIM),
+        PPOAgent(
+            enums.Character.FOX, 2, 1, device, STATE_DIM, ACTION_DIM, test_mode=True
+        ),
     ]
     # players = [NOOP(enums.Character.FOX), NOOP(enums.Character.FOX)]
 
     # normalizer = ObservationNormalizer(s_dim)
-    players[0].ppo.actor_net = torch.load(args.model_path + "actor_net.pt")
-    players[0].ppo.critic_net = torch.load(args.model_path + "critic_net.pt")
-    players[1].ppo.actor_net = torch.load(args.model_path + "actor_net.pt")
-    players[1].ppo.critic_net = torch.load(args.model_path + "critic_net.pt")
+    players[0].ppo.actor_net = torch.load(args.model_path + "actor_net_last.pt")
+    players[0].ppo.critic_net = torch.load(args.model_path + "critic_net_last.pt")
+    players[1].ppo.actor_net = torch.load(args.model_path + "actor_net_0.pt")
+    players[1].ppo.critic_net = torch.load(args.model_path + "critic_net_0.pt")
     # normalizer.load(args.model_path)
 
     for episode_id in range(args.episode_num):
