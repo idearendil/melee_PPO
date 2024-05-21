@@ -157,7 +157,7 @@ class Ppo:
             new_probs_ts = self.actor_net((st_ts1, st_ts2))
             np_ts = torch.softmax(new_probs_ts, dim=1)
 
-            entropy_loss = Categorical(np_ts).entropy().mean()
+            # entropy_loss = Categorical(np_ts).entropy().mean()
             op_ts = op_ts.gather(1, a_ts)
             np_ts = np_ts.gather(1, a_ts)
 
@@ -168,7 +168,7 @@ class Ppo:
             clipped_loss = ratio * adv_ts
 
             actor_loss = -torch.min(surrogate_loss, clipped_loss).mean()
-            actor_loss -= ENTROPY_WEIGHT * entropy_loss
+            # actor_loss -= ENTROPY_WEIGHT * entropy_loss
             self.actor_optim.zero_grad()
             actor_loss.backward()
             self.actor_optim.step()
