@@ -192,7 +192,7 @@ class Ppo:
         returns = torch.zeros_like(rewards)
         advants = torch.zeros_like(rewards)
         previous_value = 0
-        previous_reward = 0
+        previous_return = 0
         running_advants = 0
 
         for t in reversed(range(0, len(rewards))):
@@ -203,9 +203,9 @@ class Ppo:
                 running_tderror + GAMMA * LAMBDA * running_advants * masks[t]
             )
 
-            returns[t] = rewards[t] + GAMMA * previous_reward * masks[t]
+            returns[t] = rewards[t] + GAMMA * previous_return * masks[t]
             previous_value = values.data[t]
-            previous_reward = rewards.data[t]
+            previous_return = returns.data[t]
             advants[t] = running_advants
         # advants = (advants - advants.mean()) / advants.std()
         return returns, advants

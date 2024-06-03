@@ -68,7 +68,7 @@ class ObservationSpace:
             reward = (0, 0)
 
         additional_info = []
-        if self.previous_gamestates[-1] is None:
+        if len(self.previous_gamestates) > 0 and self.previous_gamestates[-1] is None:
             self.previous_gamestates.append(self.current_gamestate)
         for i in range(PRE_STATES_NUM - 1, -1, -1):
             if self.previous_gamestates[i] is not None:
