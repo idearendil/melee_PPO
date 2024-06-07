@@ -112,7 +112,7 @@ def pick_opponent(league_win_rate, device):
     ]
 
     if opp_id < 3:
-        return opp_id, CPU(enums.Character.FOX, 7 + opp_id)
+        return opp_id, CPU(enums.Character.FOX, 1 + opp_id)
 
     opp = PPOAgent(
         enums.Character.FOX, 2, 1, device, STATE_DIM, ACTION_DIM, test_mode=True

@@ -249,7 +249,7 @@ class Ppo:
                     break
                 approx_q_value += rewards[t] * (GAMMA**gamma_exponent)
                 gamma_exponent += 1
-            approx_q_value += values[end_t]
+            approx_q_value += values[end_t] * (GAMMA**gamma_exponent)
             returns[start_t] = approx_q_value
             advants[start_t] = approx_q_value - values[start_t]
         return returns, advants

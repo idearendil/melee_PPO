@@ -60,8 +60,15 @@ def run():
     # normalizer = ObservationNormalizer(s_dim)
     players[0].ppo.actor_net = torch.load(args.model_path + "actor_net_last.pt")
     players[0].ppo.critic_net = torch.load(args.model_path + "critic_net_last.pt")
-    players[1].ppo.actor_net = torch.load(args.model_path + "actor_net_0.pt")
-    players[1].ppo.critic_net = torch.load(args.model_path + "critic_net_0.pt")
+    players[0].ppo.actor_net.eval()
+    players[0].ppo.critic_net.eval()
+    players[1].ppo.actor_net = torch.load(args.model_path + "actor_net_last.pt")
+    players[1].ppo.critic_net = torch.load(args.model_path + "critic_net_last.pt")
+    players[1].ppo.actor_net.eval()
+    players[1].ppo.critic_net.eval()
+    # players[1].ppo.actor_net = torch.load(args.model_path + "actor_net_0.pt")
+    # players[1].ppo.critic_net = torch.load(args.model_path + "critic_net_0.pt")
+    # players[1] = CPU(enums.Character.FOX, 1)
     # normalizer.load(args.model_path)
 
     for episode_id in range(args.episode_num):
