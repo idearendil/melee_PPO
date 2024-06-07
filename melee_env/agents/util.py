@@ -26,9 +26,13 @@ class ObservationSpace:
                 self.previous_gamestate.players[1].shield_strength
                 - self.current_gamestate.players[1].shield_strength
             ) / (self.current_gamestate.players[1].shield_strength + 1)
-            p1_stock_loss = int(self.previous_gamestate.players[1].stock) - int(
-                self.current_gamestate.players[1].stock
-            )
+            if (
+                self.previous_gamestate.players[1].action.value > 10
+                and self.current_gamestate.players[1].action.value <= 10
+            ):
+                p1_stock_loss = 1.0
+            else:
+                p1_stock_loss = 0.0
             p2_dmg = (
                 self.current_gamestate.players[2].percent
                 - self.previous_gamestate.players[2].percent
@@ -37,9 +41,13 @@ class ObservationSpace:
                 self.previous_gamestate.players[2].shield_strength
                 - self.current_gamestate.players[2].shield_strength
             ) / (self.current_gamestate.players[2].shield_strength + 1)
-            p2_stock_loss = int(self.previous_gamestate.players[2].stock) - int(
-                self.current_gamestate.players[2].stock
-            )
+            if (
+                self.previous_gamestate.players[2].action.value > 10
+                and self.current_gamestate.players[2].action.value <= 10
+            ):
+                p2_stock_loss = 1.0
+            else:
+                p2_stock_loss = 0.0
 
             p1_stock_loss *= abs(200 - self.current_gamestate.players[1].percent) / 200
             p2_stock_loss *= abs(200 - self.current_gamestate.players[2].percent) / 200
@@ -55,7 +63,7 @@ class ObservationSpace:
             p1_shield_dmg = max(p1_shield_dmg, 0)
             p2_shield_dmg = max(p2_shield_dmg, 0)
 
-            w_dmg, w_shield, w_stock = 0.1, 0.3, 8
+            w_dmg, w_shield, w_stock = 0.2, 0.3, 6
             p1_loss = (
                 w_dmg * p1_dmg + w_shield * p1_shield_dmg + w_stock * p1_stock_loss
             )
@@ -193,7 +201,7 @@ class ActionSpace:
         # 41  [ 0.        , -1.        ,  4.        ]
         # 42  [-0.70710678, -0.70710678,  4.        ]
         # 43  [-1.        ,  0.        ,  4.        ]
-        # 45  [-0.70710678,  0.70710678,  4.        ]
+        # 44  [-0.70710678,  0.70710678,  4.        ]
 
         self.size = self.action_space.shape[0]
 

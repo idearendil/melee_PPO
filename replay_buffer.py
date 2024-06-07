@@ -35,20 +35,29 @@ class ReplayBuffer:
 
         :return:
             A tuple which consists of lists of \
-                state, action, advant, return, action_prob.
+                state1, state2, action, advant, return, action_prob.
         """
         minibatch = random.sample(self.buffer, data_size)
-        s_lst, a_lst, adv_lst, ret_lst, op_lst, id_lst = [], [], [], [], [], []
+        s1_lst, s2_lst, a_lst, adv_lst, ret_lst, op_lst, id_lst = (
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+        )
 
-        for s, a, adv, ret, op, agent_id in minibatch:
-            s_lst.append(s)
+        for s1, s2, a, adv, ret, op, agent_id in minibatch:
+            s1_lst.append(s1)
+            s2_lst.append(s2)
             a_lst.append(a)
             adv_lst.append(adv)
             ret_lst.append(ret)
             op_lst.append(op)
             id_lst.append(agent_id)
 
-        return s_lst, a_lst, adv_lst, ret_lst, op_lst, id_lst
+        return s1_lst, s2_lst, a_lst, adv_lst, ret_lst, op_lst, id_lst
 
     def size(self):
         """

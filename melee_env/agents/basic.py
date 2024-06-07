@@ -183,15 +183,7 @@ class PPOAgent(Agent):
     """
 
     def __init__(
-        self,
-        character,
-        agent_id,
-        opponent_id,
-        device,
-        s_dim,
-        a_dim,
-        test_mode=False,
-        auto_fire=True,
+        self, character, agent_id, opponent_id, device, s_dim, a_dim, test_mode=False
     ):
         super().__init__()
         self.character = character
@@ -202,7 +194,7 @@ class PPOAgent(Agent):
         self.a_dim = a_dim
         self.device = device
 
-        self.action_space = MyActionSpace()
+        self.action_space = ActionSpace()
 
         self.action = 0
         self.ppo = Ppo(self.s_dim, self.a_dim, self.device)
@@ -211,9 +203,6 @@ class PPOAgent(Agent):
         self.action_q = []
         self.action_q_idx = 0
 
-        self.auto_fire = auto_fire
-        self.requested_emergency_action = False
-
     def act(self, s):
 
         act_data = None
@@ -221,191 +210,26 @@ class PPOAgent(Agent):
         if self.action_q_idx >= len(self.action_q):
             # the agent should select a new action
             self.action_q_idx = 0
+            action_prob_np = self.ppo.choose_action(s, self.agent_id)
 
-            if self.auto_fire and s[0].players[self.agent_id].off_stage:
-                # the agent will proceed emergency actions
-                p1 = s[0].players[self.agent_id]
-                edge = EDGE_POSITION.get(s[0].stage)
-
-                if self.requested_emergency_action:
-                    self.requested_emergency_action = False
-                    self.action_q = [0]
-                elif p1.jumps_left == 0:
-                    if p1.action in [
-                        enums.Action.SWORD_DANCE_3_MID,
-                        enums.Action.SWORD_DANCE_3_LOW,
-                        enums.Action.SWORD_DANCE_3_HIGH,
-                        enums.Action.SWORD_DANCE_3_LOW_AIR,
-                        enums.Action.SWORD_DANCE_3_MID_AIR,
-                        enums.Action.SWORD_DANCE_3_HIGH_AIR,
-                        enums.Action.SWORD_DANCE_4_LOW,
-                        enums.Action.SWORD_DANCE_4_MID,
-                        enums.Action.SWORD_DANCE_4_HIGH,
-                    ]:
-                        if p1.action_frame == 39:
-                            if p1.position.x < -edge - 5:
-                                self.action_q = [5]
-                            elif p1.position.x > edge + 5:
-                                self.action_q = [6]
-                            else:
-                                self.action_q = [3]
-                        else:
-                            self.action_q = [0]
-                    else:
-                        if p1.position.y < -5:
-                            self.action_q = [21]
-                            self.requested_emergency_action = True
-                        else:
-                            if p1.position.x < 0:
-                                self.action_q = [1]
-                            else:
-                                self.action_q = [2]
-                else:
-                    self.action_q = [3, 3, 3, 0]
+            if self.test_mode:
+                # choose the most probable action
+                a = np.argmax(action_prob_np)
             else:
-                self.requested_emergency_action = False
-                action_prob_np = self.ppo.choose_action(s, self.agent_id)
-
-                if self.test_mode:
-                    # choose the most probable action
-                    final_weights = np.empty_like(action_prob_np)
-                    final_weights[:] = action_prob_np
-                    final_weights = self.neglect_invalid_actions(s[0], final_weights)
-                    a = np.argmax(final_weights)
-                else:
-                    # choose an action with probability weights
-                    # max_weight = np.max(action_prob_np)
-                    # exp_weights = np.exp((action_prob_np - max_weight) / TAU)
-                    # exp_weights = self.neglect_invalid_actions(s[0], exp_weights)
-                    # final_weights = exp_weights / np.sum(exp_weights)
-                    # a = random.choices(
-                    #     list(range(self.a_dim)), weights=final_weights, k=1)[0]
-                    final_weights = np.empty_like(action_prob_np)
-                    final_weights[:] = action_prob_np
-                    final_weights = self.neglect_invalid_actions(s[0], final_weights)
-                    final_weights = final_weights / np.sum(final_weights)
-                    a = random.choices(
-                        list(range(self.a_dim)), weights=final_weights, k=1
-                    )[0]
-                self.action_q = self.action_space.high_action_space[a]
-                act_data = (a, action_prob_np)
+                # choose an action with probability weights
+                # max_weight = np.max(action_prob_np)
+                # exp_weights = np.exp((action_prob_np - max_weight) / TAU)
+                # exp_weights = self.neglect_invalid_actions(s[0], exp_weights)
+                # final_weights = exp_weights / np.sum(exp_weights)
+                # a = random.choices(
+                #     list(range(self.a_dim)), weights=final_weights, k=1)[0]
+                a = random.choices(
+                    list(range(self.a_dim)), weights=action_prob_np, k=1
+                )[0]
+            self.action_q = [a, a, a]
+            act_data = (a, action_prob_np)
 
         now_action = self.action_q[self.action_q_idx]
         self.action_q_idx += 1
 
         return now_action, act_data
-
-    def neglect_invalid_actions(self, s, action_prob_np):
-        """
-        Prevent invalid/unsafe actions
-        """
-        p1 = s.players[self.agent_id]
-        edge = EDGE_POSITION.get(s.stage)
-        if p1.jumps_left == 0:
-            # if already double-jumped, prevent jumping
-            action_prob_np[2:8] = 0.0
-        if p1.action in [
-            enums.Action.SWORD_DANCE_1,
-            enums.Action.SWORD_DANCE_1_AIR,
-            enums.Action.SWORD_DANCE_2_HIGH,
-            enums.Action.SWORD_DANCE_2_HIGH_AIR,
-            enums.Action.SWORD_DANCE_2_MID,
-            enums.Action.SWORD_DANCE_2_MID_AIR,
-            enums.Action.SWORD_DANCE_3_LOW,
-            enums.Action.SWORD_DANCE_3_MID,
-            enums.Action.SWORD_DANCE_3_HIGH,
-            enums.Action.SWORD_DANCE_3_LOW_AIR,
-            enums.Action.SWORD_DANCE_3_MID_AIR,
-            enums.Action.SWORD_DANCE_3_HIGH_AIR,
-            enums.Action.SWORD_DANCE_4_LOW,
-            enums.Action.SWORD_DANCE_4_MID,
-            enums.Action.SWORD_DANCE_4_HIGH,
-        ]:
-            # if currently firefoxing,
-            # only tilting stick possible at important moment
-            if p1.action_frame == 38 or p1.action_frame == 39:
-                action_prob_np[:30] = 0.0
-                if p1.position.x > 0:
-                    # prevent suicide
-                    action_prob_np[30] = 0.0
-                    action_prob_np[34] = 0.0
-                    action_prob_np[36] = 0.0
-                else:
-                    # prevent suicide
-                    action_prob_np[31] = 0.0
-                    action_prob_np[35] = 0.0
-                    action_prob_np[37] = 0.0
-            else:
-                action_prob_np[:] = 0.0
-                action_prob_np[2] = 1.0
-        elif p1.action in [
-            enums.Action.GRAB,
-            enums.Action.GRAB_PULL,
-            enums.Action.GRAB_PULLING,
-            enums.Action.GRAB_PULLING_HIGH,
-            enums.Action.GRAB_PUMMEL,
-            enums.Action.GRAB_WAIT,
-        ]:
-            # if grabbing opponent, only hitting or throwing possible
-            action_prob_np[3:8] = 0.0
-            action_prob_np[9:27] = 0.0
-            action_prob_np[28:] = 0.0
-        else:
-            # if currently not firefoxing or grabbing,
-            # some tilting actions are useless
-            action_prob_np[27:] = 0.0
-        if p1.action in [
-            enums.Action.EDGE_CATCHING,
-            enums.Action.EDGE_HANGING,
-            enums.Action.EDGE_TEETERING,
-            enums.Action.EDGE_TEETERING_START,
-        ]:
-            # if grabbing edge now,
-            # only jumping / rolling / moving possible
-            action_prob_np[3] = 0.0
-            action_prob_np[6:8] = 0.0
-            action_prob_np[9:24] = 0.0
-            action_prob_np[26:] = 0.0
-            if p1.facing:
-                # prevent suicide
-                action_prob_np[1] = 0.0
-                action_prob_np[25] = 0.0
-            else:
-                # prevent suicide
-                action_prob_np[0] = 0.0
-                action_prob_np[24] = 0.0
-        if p1.action in [enums.Action.LYING_GROUND_DOWN, enums.Action.TECH_MISS_DOWN]:
-            # when lying down,
-            # only jumping / jab / rolling possible
-            action_prob_np[0:2] = 0.0
-            action_prob_np[3:8] = 0.0
-            action_prob_np[9:24] = 0.0
-            action_prob_np[26:] = 0.0
-        if not p1.on_ground:
-            # prevent impossible actions when in the air
-            action_prob_np[3] = 0.0
-            action_prob_np[6:8] = 0.0
-            action_prob_np[13:17] = 0.0
-            action_prob_np[22:26] = 0.0
-        if p1.facing:
-            # weak jab only possible in facing direction
-            action_prob_np[14] = 0.0
-        else:
-            # weak jab only possible in facing direction
-            action_prob_np[13] = 0.0
-        if p1.position.x > 0:
-            # prevent suicide
-            action_prob_np[18] = 0.0
-        if p1.position.x < 0:
-            # prevent suicide
-            action_prob_np[19] = 0.0
-        if p1.position.x < -edge + 5:
-            # prevent suicide
-            action_prob_np[1] = 0.0
-            action_prob_np[31] = 0.0
-        if p1.position.x > edge - 5:
-            # prevent suicide
-            action_prob_np[0] = 0.0
-            action_prob_np[30] = 0.0
-
-        return action_prob_np

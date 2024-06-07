@@ -8,6 +8,7 @@ import pickle
 import os
 import random
 import torch
+import time
 from pynput.keyboard import Key, Controller
 from math import log
 import numpy as np
@@ -69,41 +70,41 @@ def pick_opponent(league_win_rate, device):
     pick_prob = pick_prob / np.sum(pick_prob)
 
     # print info
-    print("\t[win rate]\t\t [pick prob]")
-    if sum(league_win_rate[0]) <= 0.0:
-        print("CPU 7:\t", "?", "\t\t", pick_prob[0])
-    else:
-        print(
-            f"CPU 7:\t{(league_win_rate[0][0] / sum(league_win_rate[0])):.6f}",
-            "\t\t",
-            pick_prob[0],
-        )
-    if sum(league_win_rate[1]) <= 0.0:
-        print("CPU 8:\t", "?", "\t\t", pick_prob[1])
-    else:
-        print(
-            f"CPU 8:\t{(league_win_rate[1][0] / sum(league_win_rate[1])):.6f}",
-            "\t\t",
-            pick_prob[1],
-        )
-    if sum(league_win_rate[2]) <= 0.0:
-        print("CPU 9:\t", "?", "\t\t", pick_prob[2])
-    else:
-        print(
-            f"CPU 9:\t{(league_win_rate[2][0] / sum(league_win_rate[2])):.6f}",
-            "\t\t",
-            pick_prob[2],
-        )
-    for i in range(3, len(league_win_rate)):
-        if sum(league_win_rate[i]) <= 0.0:
-            print(f"Agent{i - 3}:", "?       ", "\t\t", pick_prob[i])
-        else:
-            print(
-                f"Agent{i-3}:",
-                f"{(league_win_rate[i][0] / sum(league_win_rate[i])):.6f}",
-                "\t\t",
-                pick_prob[i],
-            )
+    # print("\t[win rate]\t\t [pick prob]")
+    # if sum(league_win_rate[0]) <= 0.0:
+    #     print("CPU 7:\t", "?", "\t\t", pick_prob[0])
+    # else:
+    #     print(
+    #         f"CPU 7:\t{(league_win_rate[0][0] / sum(league_win_rate[0])):.6f}",
+    #         "\t\t",
+    #         pick_prob[0],
+    #     )
+    # if sum(league_win_rate[1]) <= 0.0:
+    #     print("CPU 8:\t", "?", "\t\t", pick_prob[1])
+    # else:
+    #     print(
+    #         f"CPU 8:\t{(league_win_rate[1][0] / sum(league_win_rate[1])):.6f}",
+    #         "\t\t",
+    #         pick_prob[1],
+    #     )
+    # if sum(league_win_rate[2]) <= 0.0:
+    #     print("CPU 9:\t", "?", "\t\t", pick_prob[2])
+    # else:
+    #     print(
+    #         f"CPU 9:\t{(league_win_rate[2][0] / sum(league_win_rate[2])):.6f}",
+    #         "\t\t",
+    #         pick_prob[2],
+    #     )
+    # for i in range(3, len(league_win_rate)):
+    #     if sum(league_win_rate[i]) <= 0.0:
+    #         print(f"Agent{i - 3}:", "?       ", "\t\t", pick_prob[i])
+    #     else:
+    #         print(
+    #             f"Agent{i-3}:",
+    #             f"{(league_win_rate[i][0] / sum(league_win_rate[i])):.6f}",
+    #             "\t\t",
+    #             pick_prob[i],
+    #         )
 
     # pick opponent
     opp_id = random.choices(list(range(len(league_win_rate))), weights=pick_prob, k=1)[
@@ -232,6 +233,7 @@ def run():
             score = 0
 
             opp_id, players[1] = pick_opponent(league_win_rate, device)
+            players[0].action_q = []
 
             env = MeleeEnv(args.iso, players, fast_forward=True)
             env.start()
@@ -240,12 +242,8 @@ def run():
             now_s, _ = env.reset(enums.Stage.FINAL_DESTINATION)
 
             episode_memory = []
-            episode_buffer = []
 
-            r_sum = 0
-            mask_sum = 1
-            last_state_idx = -1
-            fucked_up_cnt = 0
+            countdown_before_action_applied = 0
             action_pair = [0, 0]
 
             for step_cnt in range(MAX_STEP):
@@ -254,9 +252,16 @@ def run():
                     # pick player1's action
                     action_pair[0], act_data = players[0].act(now_s)
                     if act_data is not None:
-                        episode_buffer.append(
-                            [now_s, act_data[0], act_data[1], step_cnt]
+                        episode_memory.append(
+                            ([now_s, act_data[0], act_data[1]], [None, 0, 1])
                         )
+                        if countdown_before_action_applied > 0:
+                            print(
+                                "error occured!!! Timer is not cleared before the new action decided!"
+                            )
+                        countdown_before_action_applied = DELAY
+                        if countdown_before_action_applied == 0:
+                            episode_memory[-1][1][0] = now_s
 
                     # pick player2's action
                     if opp_id < 3:
@@ -268,53 +273,27 @@ def run():
                     mask = (1 - done) * 1
                     score += r[0]  # just for log
 
-                    r_sum += r[0]
-                    mask_sum *= mask
+                    if countdown_before_action_applied > 0:
+                        if len(episode_memory) > 1:
+                            episode_memory[-2][1][1] += r[0]
+                            episode_memory[-2][1][2] *= mask
+                        countdown_before_action_applied -= 1
+                        if countdown_before_action_applied == 0:
+                            episode_memory[-1][1][0] = now_s
+                    else:
+                        episode_memory[-1][1][1] += r[0]
+                        episode_memory[-1][1][2] *= mask
 
                     if done or step_cnt >= MAX_STEP - 1:
-                        # if finished, add last information to episode memory
-                        temp = episode_buffer[last_state_idx]
-                        episode_memory.append([temp[0], temp[1], r_sum, 0, temp[2]])
-
+                        if episode_memory[-1][1][0] is None:
+                            episode_memory.pop()
+                        score = score * MAX_STEP / step_cnt
                         # so... who won?
                         if now_s[0].players[1].stock > now_s[0].players[2].stock:
                             league_win_rate[opp_id][0] += 1.0
                         else:
                             league_win_rate[opp_id][1] += 1.0
                         break
-
-                    if (
-                        now_s[0].players[1].action_frame == 1
-                        and now_s[0].players[1].position.y >= 0
-                    ):
-                        # if agent's new action animation just started
-                        p1_action = now_s[0].players[1].action
-                        if p1_action in players[0].action_space.sensor:
-                            # if agent's animation is in sensor set
-                            # find action which caused agent's current animation
-                            action_candidate = players[0].action_space.sensor[p1_action]
-                            action_is_found = False
-                            for i in range(len(episode_buffer) - 1, last_state_idx, -1):
-
-                                if episode_buffer[i][3] > step_cnt - DELAY:
-                                    # action can cause animation after 2 frames at least
-                                    continue
-
-                                if episode_buffer[i][1] in action_candidate:
-                                    if last_state_idx >= 0:
-                                        # save last action and its consequence in episode memory
-                                        temp = episode_buffer[last_state_idx]
-                                        episode_memory.append(
-                                            [temp[0], temp[1], r_sum, mask_sum, temp[2]]
-                                        )
-                                    r_sum = 0
-                                    mask_sum = 1
-                                    last_state_idx = i
-                                    action_is_found = True
-                                    break
-
-                            if not action_is_found:
-                                fucked_up_cnt += 1
                 else:
                     action_pair = [0, 0]
                     now_s, _, _, _ = env.step(*action_pair)
@@ -324,14 +303,12 @@ def run():
                 Controller().release(Key.tab)
 
             players[0].ppo.push_an_episode(episode_memory, 1)
-            print(
-                "episode:",
-                episode_id,
-                "\tbuffer length:",
-                players[0].ppo.buffer.size(),
-                "\tfucked up:",
-                fucked_up_cnt,
-            )
+            # print(
+            #     "episode:",
+            #     episode_id,
+            #     "\tbuffer length:",
+            #     players[0].ppo.buffer.size(),
+            # )
 
             with open("log_self_train.csv", "a", encoding="utf-8") as outfile:
                 outfile.write(str(episode_id) + "," + str(score) + "\n")
@@ -349,7 +326,7 @@ def run():
             agent_release(players[0], len(league_win_rate) - 4)
 
         print("cycle: ", cycle_id, "\tscore: ", np.mean(scores))
-        players[0].ppo.train()
+        players[0].ppo.train(episode_id=episode_id)
 
         save_files(players[0], league_win_rate)
 
