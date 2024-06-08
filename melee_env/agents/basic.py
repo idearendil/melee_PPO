@@ -202,6 +202,10 @@ class PPOAgent(Agent):
 
         self.action_q = []
         self.action_q_idx = 0
+        self.hs_cs = (
+            torch.zeros((2, 1, 256), dtype=torch.float32).to(device),
+            torch.zeros((2, 1, 256), dtype=torch.float32).to(device),
+        )
 
     def act(self, s):
 
@@ -210,7 +214,9 @@ class PPOAgent(Agent):
         if self.action_q_idx >= len(self.action_q):
             # the agent should select a new action
             self.action_q_idx = 0
-            action_prob_np = self.ppo.choose_action(s, self.agent_id)
+            action_prob_np, self.hs_cs = self.ppo.choose_action(
+                s, self.agent_id, self.hs_cs, self.device
+            )
 
             if self.test_mode:
                 # choose the most probable action
@@ -227,7 +233,7 @@ class PPOAgent(Agent):
                     list(range(self.a_dim)), weights=action_prob_np, k=1
                 )[0]
             self.action_q = [a, a, a]
-            act_data = (a, action_prob_np)
+            act_data = a
 
         now_action = self.action_q[self.action_q_idx]
         self.action_q_idx += 1

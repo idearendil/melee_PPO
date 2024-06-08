@@ -24,6 +24,7 @@ class ReplayBuffer:
             data should be a tuple of \
                 state, action, advant, return, action_prob.
         """
+
         self.buffer.append(data)
 
     def pull(self, data_size):
@@ -35,29 +36,35 @@ class ReplayBuffer:
 
         :return:
             A tuple which consists of lists of \
-                state1, state2, action, advant, return, action_prob.
+                state1, state2, action, advant, return, action_prob, \
+                    actor_hs_cs, critic_hs_cs, agent_id.
         """
         minibatch = random.sample(self.buffer, data_size)
-        s1_lst, s2_lst, a_lst, adv_lst, ret_lst, op_lst, id_lst = (
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
+        s1_lst, s2_lst, a_lst, adv_lst, ret_lst, op_lst = [], [], [], [], [], []
+        actor_hs_cs_lst, critic_hs_cs_lst, id_lst = [], [], []
+
+        for an_episode in minibatch:
+            s1_lst.append(an_episode[0])
+            s2_lst.append(an_episode[1])
+            a_lst.extend(an_episode[2])
+            adv_lst.append(an_episode[3])
+            ret_lst.append(an_episode[4])
+            op_lst.append(an_episode[5])
+            actor_hs_cs_lst.append(an_episode[6])
+            critic_hs_cs_lst.append(an_episode[7])
+            id_lst.append(an_episode[8])
+
+        return (
+            s1_lst,
+            s2_lst,
+            a_lst,
+            adv_lst,
+            ret_lst,
+            op_lst,
+            actor_hs_cs_lst,
+            critic_hs_cs_lst,
+            id_lst,
         )
-
-        for s1, s2, a, adv, ret, op, agent_id in minibatch:
-            s1_lst.append(s1)
-            s2_lst.append(s2)
-            a_lst.append(a)
-            adv_lst.append(adv)
-            ret_lst.append(ret)
-            op_lst.append(op)
-            id_lst.append(agent_id)
-
-        return s1_lst, s2_lst, a_lst, adv_lst, ret_lst, op_lst, id_lst
 
     def size(self):
         """

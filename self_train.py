@@ -123,6 +123,8 @@ def pick_opponent(league_win_rate, device):
     opp.ppo.critic_net = torch.load(
         args.model_path + "critic_net_" + str(opp_id - 3) + ".pt"
     ).to(device)
+    opp.ppo.actor_net.eval()
+
     return opp_id, opp
 
 
@@ -234,6 +236,7 @@ def run():
 
             opp_id, players[1] = pick_opponent(league_win_rate, device)
             players[0].action_q = []
+            players[0].ppo.actor_net.eval()
 
             env = MeleeEnv(args.iso, players, fast_forward=True)
             env.start()
@@ -252,9 +255,7 @@ def run():
                     # pick player1's action
                     action_pair[0], act_data = players[0].act(now_s)
                     if act_data is not None:
-                        episode_memory.append(
-                            ([now_s, act_data[0], act_data[1]], [None, 0, 1])
-                        )
+                        episode_memory.append(([now_s, act_data], [None, 0, 1]))
                         if countdown_before_action_applied > 0:
                             print(
                                 "error occured!!! Timer is not cleared before the new action decided!"
@@ -317,7 +318,7 @@ def run():
         # check if the win rate satisfies agent-releasing condition.
         agent_release_flag = True
         for a_win_rate in league_win_rate:
-            if a_win_rate[0] / sum(a_win_rate) < 0.6:
+            if a_win_rate[0] / (sum(a_win_rate) + 1) < 0.6:
                 agent_release_flag = False
             a_win_rate[0] *= WIN_RATE_DECAY
             a_win_rate[1] *= WIN_RATE_DECAY

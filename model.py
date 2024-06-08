@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import random
 import numpy as np
-from parameters import TAU
+from parameters import EPISODE_LEN
 
 
 class Actor(nn.Module):
@@ -18,47 +18,52 @@ class Actor(nn.Module):
     def __init__(self, s_dim, a_dim):
         super(Actor, self).__init__()
         self.fc1 = nn.Linear(s_dim, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 128)
-        self.fc4 = nn.Linear(128, a_dim)
-        self.bn1d_1 = nn.BatchNorm1d(256)
-        self.bn1d_2 = nn.BatchNorm1d(256)
-        self.bn1d_3 = nn.BatchNorm1d(128)
+        self.core = nn.LSTM(256, 256, 2, batch_first=True)
+        self.fc2 = nn.Linear(256, a_dim)
         self.a_dim = a_dim
+        self.s_dim = s_dim
         self.activ = nn.ELU()
 
-    def forward(self, s):
+    def forward(self, s, hs_cs):
         """
         Network forward function.
 
         Args:
             s: curent observation
         Returns:
-            mu and sigma of policy considering current observation
+            logits for each action
         """
         s1, s2 = s
+        origin_shape = s1.shape[:-1]
 
-        s1 = self.bn1d_1(self.activ(self.fc1(s1)))
-        s1 = self.bn1d_2(self.activ(self.fc2(s1)))
-        s1 = self.bn1d_3(self.activ(self.fc3(s1)))
-        return self.fc4(s1)
+        s1 = s1.reshape((-1, self.s_dim))
+        s1 = self.activ(self.fc1(s1))
+        s1 = s1.reshape(origin_shape + (256,))
+        s1, hs_cs = self.core(s1, hs_cs)
+        s1 = s1.reshape((-1, 256))
+        s1 = self.fc2(s1)
+        s1 = s1.reshape(origin_shape + (self.a_dim,))
+        return s1, hs_cs
 
-    def choose_action(self, s):
+    def choose_action(self, s, hs_cs=None, device="cpu"):
         """
         Choose action by normal distribution
 
         Args:
             s: current observation
         Returns:
-            action tensor sampled from policy(normal distribution),
-            log probability of the action
+            probability for each action
         """
+        if hs_cs is None:
+            hs = torch.zeros((2, len(s), 256), dtype=torch.float32).to(device)
+            cs = torch.zeros((2, len(s), 256), dtype=torch.float32).to(device)
+            hs_cs = (hs, cs)
         with torch.no_grad():
             self.eval()
-            action_prob_ts = self.forward(s)
+            action_prob_ts, hs_cs = self.forward(s, hs_cs)
             action_prob_ts = torch.softmax(action_prob_ts, dim=1)
             action_prob_np = action_prob_ts.squeeze().cpu().numpy()
-        return action_prob_np
+        return action_prob_np, hs_cs
 
 
 class Critic(nn.Module):
@@ -68,16 +73,13 @@ class Critic(nn.Module):
 
     def __init__(self, s_dim):
         super(Critic, self).__init__()
+        self.s_dim = s_dim
         self.fc1 = nn.Linear(s_dim, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 128)
-        self.fc4 = nn.Linear(128, 1)
-        self.bn1d_1 = nn.BatchNorm1d(256)
-        self.bn1d_2 = nn.BatchNorm1d(256)
-        self.bn1d_3 = nn.BatchNorm1d(128)
+        self.core = nn.LSTM(256, 256, 2, batch_first=True)
+        self.fc2 = nn.Linear(256, 1)
         self.activ = nn.ELU()
 
-    def forward(self, s):
+    def forward(self, s, hs_cs):
         """
         Network forward function.
 
@@ -88,7 +90,13 @@ class Critic(nn.Module):
         """
         s1, s2 = s
 
-        s1 = self.bn1d_1(self.activ(self.fc1(s1)))
-        s1 = self.bn1d_2(self.activ(self.fc2(s1)))
-        s1 = self.bn1d_3(self.activ(self.fc3(s1)))
-        return self.fc4(s1)
+        origin_shape = s1.shape[:-1]
+        s1 = s1.reshape((-1, self.s_dim))
+
+        s1 = self.activ(self.fc1(s1))
+        s1 = s1.reshape(origin_shape + (256,))
+        s1, hs_cs = self.core(s1, hs_cs)
+        s1 = s1.reshape((-1, 256))
+        s1 = self.fc2(s1)
+        s1 = s1.reshape(origin_shape + (1,))
+        return s1, hs_cs

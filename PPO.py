@@ -13,6 +13,7 @@ from parameters import (
     GAMMA,
     LAMBDA,
     BATCH_SIZE,
+    EPISODE_LEN,
     EPSILON,
     L2_RATE,
     BUFFER_SIZE,
@@ -48,36 +49,44 @@ class Ppo:
         self.actor_net.to(device)
         self.critic_net.to(device)
 
-    def choose_action(self, s, agent_id):
+    def choose_action(self, s, agent_id, hs_cs=None, device="cpu"):
         """
         Convert state to preprocessed tensor,
         and then return action probability by actor_net
         """
         s_ts1, s_ts2 = self.state_preprocessor(s, agent_id)
-        s_ts1 = torch.from_numpy(s_ts1).unsqueeze(0).to(self.device)
-        s_ts2 = torch.from_numpy(s_ts2).unsqueeze(0).to(self.device)
-        return self.actor_net.choose_action((s_ts1, s_ts2))
+        s_ts1 = torch.from_numpy(s_ts1).unsqueeze(0).unsqueeze(0).to(self.device)
+        s_ts2 = torch.from_numpy(s_ts2).unsqueeze(0).unsqueeze(0).to(self.device)
+        return self.actor_net.choose_action((s_ts1, s_ts2), hs_cs, device)
 
     def push_an_episode(self, data, agent_id):
         """
         Push an episode to replay buffer.
 
         Args:
-            data: an array of ([s1, a, a_prob], [s2, r, mask])
+            data: an array of ([s1, a], [s2, r, mask])
         Returns:
             None
         """
 
-        s1_lst, a_lst, prob_lst, s2_lst, r_lst, mask_lst = [], [], [], [], [], []
+        s1_lst, a_lst, s2_lst, r_lst, mask_lst = [], [], [], [], []
         for data1, data2 in data:
-            s1, a, prob = data1
+            s1, a = data1
             s2, r, mask = data2
             s1_lst.append(s1)
             a_lst.append(a)
-            prob_lst.append((torch.Tensor(prob)))
             s2_lst.append(s2)
             r_lst.append(r)
             mask_lst.append(mask)
+
+        if len(s1_lst) != len(s2_lst):
+            print("Error occured!!! len(s1_lst) != len(s2_lst)")
+
+        s1_lst = s1_lst[: len(s1_lst) // EPISODE_LEN * EPISODE_LEN]
+        s2_lst = s2_lst[: len(s2_lst) // EPISODE_LEN * EPISODE_LEN]
+        a_lst = a_lst[: len(a_lst) // EPISODE_LEN * EPISODE_LEN]
+        r_lst = r_lst[: len(r_lst) // EPISODE_LEN * EPISODE_LEN]
+        mask_lst = mask_lst[: len(mask_lst) // EPISODE_LEN * EPISODE_LEN]
 
         s1_lst1, s1_lst2, s2_lst1, s2_lst2 = [], [], [], []
         for s1 in s1_lst:
@@ -89,6 +98,8 @@ class Ppo:
             s2_lst1.append(s2_1)
             s2_lst2.append(s2_2)
 
+        s1_ts1 = torch.Tensor(np.array(s1_lst1, dtype=np.float32)).to(self.device)
+        s1_ts2 = torch.Tensor(np.array(s1_lst2, dtype=np.float32)).to(self.device)
         s2_ts1 = torch.Tensor(np.array(s2_lst1, dtype=np.float32)).to(self.device)
         s2_ts2 = torch.Tensor(np.array(s2_lst2, dtype=np.float32)).to(self.device)
         r_ts = torch.Tensor(np.array(r_lst, dtype=np.float32))
@@ -96,27 +107,58 @@ class Ppo:
 
         with torch.no_grad():
             self.critic_net.eval()
+            self.actor_net.eval()
+            actor_hs_cs = (
+                torch.zeros((2, 1, 256), dtype=torch.float32).to(self.device),
+                torch.zeros((2, 1, 256), dtype=torch.float32).to(self.device),
+            )
+            critic_hs_cs = (
+                torch.zeros((2, 1, 256), dtype=torch.float32).to(self.device),
+                torch.zeros((2, 1, 256), dtype=torch.float32).to(self.device),
+            )
             v_lst = []
-            for idx in range(0, len(s2_ts1), BATCH_SIZE):
-                idx_end = min(idx + BATCH_SIZE, len(s2_ts1))
-                v_lst.append(
-                    self.critic_net((s2_ts1[idx:idx_end], s2_ts2[idx:idx_end])).cpu()
+            prob_lst = []
+            actor_hs_cs_lst = []
+            critic_hs_cs_lst = []
+            for idx in range(0, len(s1_ts1), EPISODE_LEN):
+                idx_end = idx + EPISODE_LEN
+                actor_hs_cs_lst.append(actor_hs_cs)
+                critic_hs_cs_lst.append(critic_hs_cs)
+                prob, actor_hs_cs = self.actor_net(
+                    (s1_ts1[idx:idx_end].unsqueeze(0), s1_ts2[idx:idx_end]), actor_hs_cs
                 )
-            v_ts = torch.concatenate(v_lst, dim=0).squeeze()
+                v, critic_hs_cs = self.critic_net(
+                    (s2_ts1[idx:idx_end].unsqueeze(0), s2_ts2[idx:idx_end]),
+                    critic_hs_cs,
+                )
+                prob = torch.softmax(prob.squeeze(), dim=1)
+                v = v.squeeze()
+                v_lst.append(v)
+                prob_lst.append(prob)
+            v_ts = torch.concatenate(v_lst, dim=0).squeeze().cpu()
+            prob_ts = torch.concatenate(prob_lst, dim=0).squeeze().cpu()
             ret_ts, adv_ts = self.td_error(r_ts, masks, v_ts)
 
-        if len(s1_lst) != len(s2_lst):
-            print("Error occured!!! len(s1_lst) != len(s2_lst)")
-
-        for idx, _ in enumerate(s1_lst1):
+        for idx in range(0, len(s1_ts1), EPISODE_LEN):
+            idx_end = idx + EPISODE_LEN
+            actor_hs_cs = (
+                actor_hs_cs_lst[idx // EPISODE_LEN][0].cpu().clone().detach(),
+                actor_hs_cs_lst[idx // EPISODE_LEN][1].cpu().clone().detach(),
+            )
+            critic_hs_cs = (
+                critic_hs_cs_lst[idx // EPISODE_LEN][0].cpu().clone().detach(),
+                critic_hs_cs_lst[idx // EPISODE_LEN][1].cpu().clone().detach(),
+            )
             self.buffer.push(
                 (
-                    s1_lst[idx],
-                    s2_lst[idx],
-                    a_lst[idx],
-                    adv_ts[idx].item(),
-                    ret_ts[idx].item(),
-                    prob_lst[idx],
+                    s1_lst[idx:idx_end],
+                    s2_lst[idx:idx_end],
+                    a_lst[idx:idx_end],
+                    adv_ts[idx:idx_end].clone().detach(),
+                    ret_ts[idx:idx_end].clone().detach(),
+                    prob_ts[idx:idx_end].clone().detach(),
+                    actor_hs_cs,
+                    critic_hs_cs,
                     agent_id,
                 )
             )
@@ -133,46 +175,74 @@ class Ppo:
         self.critic_optim = optim.Adam(
             self.critic_net.parameters(), lr=LR_CRITIC, weight_decay=L2_RATE
         )
+        for name, child in self.critic_net.named_children():
+            for param in child.parameters():
+                print(name, param)
         critic_loss_lst, actor_loss_lst, entropy_loss_lst = [], [], []
         for batch_id in range(BATCH_NUM):
-
-            s1_lst, s2_lst, a_lst, adv_lst, ret_lst, op_lst, id_lst = self.buffer.pull(
-                BATCH_SIZE
-            )
+            (
+                s1_lst,
+                s2_lst,
+                a_lst,
+                adv_lst,
+                ret_lst,
+                op_lst,
+                actor_hs_cs_lst,
+                critic_hs_cs_lst,
+                id_lst,
+            ) = self.buffer.pull(BATCH_SIZE)
 
             s1_lst1, s1_lst2, s2_lst1, s2_lst2 = [], [], [], []
-            for s1, s2, agent_id in zip(s1_lst, s2_lst, id_lst):
-                s1_1, s1_2 = self.state_preprocessor(s1, agent_id)
-                s1_lst1.append(s1_1)
-                s1_lst2.append(s1_2)
-                s2_1, s2_2 = self.state_preprocessor(s2, agent_id)
-                s2_lst1.append(s2_1)
-                s2_lst2.append(s2_2)
-
+            for ep_s1_lst, ep_s2_lst, agent_id in zip(s1_lst, s2_lst, id_lst):
+                ep_s1_lst1, ep_s1_lst2, ep_s2_lst1, ep_s2_lst2 = (
+                    [],
+                    [],
+                    [],
+                    [],
+                )
+                for s1, s2 in zip(ep_s1_lst, ep_s2_lst):
+                    s1_1, s1_2 = self.state_preprocessor(s1, agent_id)
+                    ep_s1_lst1.append(s1_1)
+                    ep_s1_lst2.append(s1_2)
+                    s2_1, s2_2 = self.state_preprocessor(s2, agent_id)
+                    ep_s2_lst1.append(s2_1)
+                    ep_s2_lst2.append(s2_2)
+                s1_lst1.append(np.stack(ep_s1_lst1, axis=0))
+                s1_lst2.append(np.stack(ep_s1_lst2, axis=0))
+                s2_lst1.append(np.stack(ep_s2_lst1, axis=0))
+                s2_lst2.append(np.stack(ep_s2_lst2, axis=0))
             s1_ts1 = torch.Tensor(np.stack(s1_lst1, axis=0)).to(self.device)
             s1_ts2 = torch.Tensor(np.stack(s1_lst2, axis=0)).to(self.device)
             s2_ts1 = torch.Tensor(np.stack(s2_lst1, axis=0)).to(self.device)
             s2_ts2 = torch.Tensor(np.stack(s2_lst2, axis=0)).to(self.device)
-            a_ts = torch.LongTensor(a_lst).to(self.device).unsqueeze(1)
-            adv_ts = (
-                torch.Tensor(np.array(adv_lst, dtype=np.float32))
-                .unsqueeze(1)
-                .to(self.device)
-            )
-            ret_ts = (
-                torch.Tensor(np.array(ret_lst, dtype=np.float32))
-                .unsqueeze(1)
-                .to(self.device)
-            )
-            op_ts = torch.Tensor(np.stack(op_lst, axis=0)).to(self.device)
 
-            v_ts = self.critic_net((s2_ts1, s2_ts2))
+            a_ts = torch.LongTensor(a_lst).to(self.device).unsqueeze(1)
+            adv_ts = torch.cat(adv_lst, dim=0).unsqueeze(1).to(self.device)
+            ret_ts = torch.cat(ret_lst, dim=0).unsqueeze(1).to(self.device)
+            op_ts = torch.cat(op_lst, dim=0).to(self.device)
+
+            actor_hs_lst, actor_cs_lst = [], []
+            for actor_hs_cs in actor_hs_cs_lst:
+                actor_hs_lst.append(actor_hs_cs[0])
+                actor_cs_lst.append(actor_hs_cs[1])
+            actor_hs = torch.cat(actor_hs_lst, dim=1).to(self.device)
+            actor_cs = torch.cat(actor_cs_lst, dim=1).to(self.device)
+            critic_hs_lst, critic_cs_lst = [], []
+            for critic_hs_cs in critic_hs_cs_lst:
+                critic_hs_lst.append(critic_hs_cs[0])
+                critic_cs_lst.append(critic_hs_cs[1])
+            critic_hs = torch.cat(critic_hs_lst, dim=1).to(self.device)
+            critic_cs = torch.cat(critic_cs_lst, dim=1).to(self.device)
+
+            v_ts, _ = self.critic_net((s2_ts1, s2_ts2), (critic_hs, critic_cs))
+            v_ts = v_ts.reshape((-1, 1))
             critic_loss = self.critic_loss_func(v_ts, ret_ts)
             self.critic_optim.zero_grad()
             critic_loss.backward()
             self.critic_optim.step()
 
-            new_probs_ts = self.actor_net((s1_ts1, s1_ts2))
+            new_probs_ts, _ = self.actor_net((s1_ts1, s1_ts2), (actor_hs, actor_cs))
+            new_probs_ts = new_probs_ts.reshape((-1, op_ts.shape[1]))
             np_ts = torch.softmax(new_probs_ts, dim=1)
 
             entropy_loss = Categorical(np_ts).entropy().mean()
@@ -196,7 +266,7 @@ class Ppo:
             actor_loss_lst.append(actor_loss.item())
             critic_loss_lst.append(critic_loss.item())
             entropy_loss_lst.append(entropy_loss.item())
-            if (batch_id + 1) % 3 == 0:
+            if (batch_id + 1) % 5 == 0:
                 print(
                     f"critic loss: {sum(critic_loss_lst)/len(critic_loss_lst):.8f}",
                     f"\t\tactor loss: {sum(actor_loss_lst)/len(actor_loss_lst):.8f}",
@@ -205,6 +275,10 @@ class Ppo:
                 actor_loss_lst.clear()
                 critic_loss_lst.clear()
                 entropy_loss_lst.clear()
+
+        for name, child in self.critic_net.named_children():
+            for param in child.parameters():
+                print(name, param)
 
     def get_gae(self, rewards, masks, values):
         """
