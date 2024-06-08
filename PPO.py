@@ -175,9 +175,6 @@ class Ppo:
         self.critic_optim = optim.Adam(
             self.critic_net.parameters(), lr=LR_CRITIC, weight_decay=L2_RATE
         )
-        for name, child in self.critic_net.named_children():
-            for param in child.parameters():
-                print(name, param)
         critic_loss_lst, actor_loss_lst, entropy_loss_lst = [], [], []
         for batch_id in range(BATCH_NUM):
             (
@@ -275,10 +272,6 @@ class Ppo:
                 actor_loss_lst.clear()
                 critic_loss_lst.clear()
                 entropy_loss_lst.clear()
-
-        for name, child in self.critic_net.named_children():
-            for param in child.parameters():
-                print(name, param)
 
     def get_gae(self, rewards, masks, values):
         """

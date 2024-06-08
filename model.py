@@ -34,15 +34,10 @@ class Actor(nn.Module):
             logits for each action
         """
         s1, s2 = s
-        origin_shape = s1.shape[:-1]
 
-        s1 = s1.reshape((-1, self.s_dim))
         s1 = self.activ(self.fc1(s1))
-        s1 = s1.reshape(origin_shape + (256,))
         s1, hs_cs = self.core(s1, hs_cs)
-        s1 = s1.reshape((-1, 256))
         s1 = self.fc2(s1)
-        s1 = s1.reshape(origin_shape + (self.a_dim,))
         return s1, hs_cs
 
     def choose_action(self, s, hs_cs=None, device="cpu"):
@@ -90,13 +85,7 @@ class Critic(nn.Module):
         """
         s1, s2 = s
 
-        origin_shape = s1.shape[:-1]
-        s1 = s1.reshape((-1, self.s_dim))
-
         s1 = self.activ(self.fc1(s1))
-        s1 = s1.reshape(origin_shape + (256,))
         s1, hs_cs = self.core(s1, hs_cs)
-        s1 = s1.reshape((-1, 256))
         s1 = self.fc2(s1)
-        s1 = s1.reshape(origin_shape + (1,))
         return s1, hs_cs
