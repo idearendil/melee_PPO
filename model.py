@@ -18,13 +18,10 @@ class Actor(nn.Module):
     def __init__(self, s_dim, a_dim):
         super(Actor, self).__init__()
         self.fc1 = nn.Linear(s_dim, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 128)
-        self.fc4 = nn.Linear(128, a_dim)
-        self.bn1d_1 = nn.BatchNorm1d(256)
-        self.bn1d_2 = nn.BatchNorm1d(256)
-        self.bn1d_3 = nn.BatchNorm1d(128)
+        self.core = nn.LSTM(256, 256, 2, batch_first=True)
+        self.fc2 = nn.Linear(256, a_dim)
         self.a_dim = a_dim
+        self.s_dim = s_dim
         self.activ = nn.ELU()
 
     def forward(self, s, hs_cs):
@@ -34,14 +31,14 @@ class Actor(nn.Module):
         Args:
             s: curent observation
         Returns:
-            mu and sigma of policy considering current observation
+            logits for each action
         """
         s1, s2 = s
 
-        s1 = self.bn1d_1(self.activ(self.fc1(s1)))
-        s1 = self.bn1d_2(self.activ(self.fc2(s1)))
-        s1 = self.bn1d_3(self.activ(self.fc3(s1)))
-        return self.fc4(s1), hs_cs
+        s1 = self.activ(self.fc1(s1))
+        s1, hs_cs = self.core(s1, hs_cs)
+        s1 = self.fc2(s1)
+        return s1, hs_cs
 
     def choose_action(self, s, hs_cs=None, device="cpu"):
         """
@@ -59,7 +56,7 @@ class Actor(nn.Module):
         with torch.no_grad():
             self.eval()
             action_prob_ts, hs_cs = self.forward(s, hs_cs)
-            action_prob_ts = torch.softmax(action_prob_ts, dim=1)
+            action_prob_ts = torch.softmax(action_prob_ts, dim=2)
             action_prob_np = action_prob_ts.squeeze().cpu().numpy()
         return action_prob_np, hs_cs
 
@@ -71,13 +68,10 @@ class Critic(nn.Module):
 
     def __init__(self, s_dim):
         super(Critic, self).__init__()
+        self.s_dim = s_dim
         self.fc1 = nn.Linear(s_dim, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 128)
-        self.fc4 = nn.Linear(128, 1)
-        self.bn1d_1 = nn.BatchNorm1d(256)
-        self.bn1d_2 = nn.BatchNorm1d(256)
-        self.bn1d_3 = nn.BatchNorm1d(128)
+        self.core = nn.LSTM(256, 256, 2, batch_first=True)
+        self.fc2 = nn.Linear(256, 1)
         self.activ = nn.ELU()
 
     def forward(self, s, hs_cs):
@@ -91,7 +85,7 @@ class Critic(nn.Module):
         """
         s1, s2 = s
 
-        s1 = self.bn1d_1(self.activ(self.fc1(s1)))
-        s1 = self.bn1d_2(self.activ(self.fc2(s1)))
-        s1 = self.bn1d_3(self.activ(self.fc3(s1)))
-        return self.fc4(s1), hs_cs
+        s1 = self.activ(self.fc1(s1))
+        s1, hs_cs = self.core(s1, hs_cs)
+        s1 = self.fc2(s1)
+        return s1, hs_cs

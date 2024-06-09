@@ -20,6 +20,7 @@ from parameters import (
     BATCH_NUM,
     ENTROPY_WEIGHT,
     PRE_STATES_NUM,
+    PREDICTION_NUM,
 )
 from replay_buffer import ReplayBuffer
 from math import log
@@ -57,8 +58,8 @@ class Ppo:
         and then return action probability by actor_net
         """
         s_ts1, s_ts2 = self.state_preprocessor(s, agent_id, True)
-        s_ts1 = torch.from_numpy(s_ts1).unsqueeze(0).to(self.device)
-        s_ts2 = torch.from_numpy(s_ts2).unsqueeze(0).to(self.device)
+        s_ts1 = torch.from_numpy(s_ts1).unsqueeze(0).unsqueeze(0).to(self.device)
+        s_ts2 = torch.from_numpy(s_ts2).unsqueeze(0).unsqueeze(0).to(self.device)
         return self.actor_net.choose_action((s_ts1, s_ts2), hs_cs, device)
 
     def push_an_episode(self, data, agent_id):
@@ -124,11 +125,11 @@ class Ppo:
                 critic_hs_lst.append(critic_hs_cs[0].cpu().clone().detach())
                 critic_cs_lst.append(critic_hs_cs[1].cpu().clone().detach())
                 prob, actor_hs_cs = self.actor_net(
-                    (s1_ts1[idx].unsqueeze(0), s1_ts2[idx]),
+                    (s1_ts1[idx].unsqueeze(0).unsqueeze(0), s1_ts2[idx]),
                     actor_hs_cs,
                 )
                 v, critic_hs_cs = self.critic_net(
-                    (s2_ts1[idx].unsqueeze(0), s2_ts2[idx]),
+                    (s2_ts1[idx].unsqueeze(0).unsqueeze(0), s2_ts2[idx]),
                     critic_hs_cs,
                 )
                 prob = torch.softmax(prob.squeeze().cpu(), dim=0)
@@ -187,6 +188,7 @@ class Ppo:
             ) = self.buffer.pull(BATCH_SIZE, self.device)
 
             v_ts, _ = self.critic_net((s2_ts1, s2_ts2), (critic_hs, critic_cs))
+            v_ts = v_ts[:, -PREDICTION_NUM:, :]
             v_ts = v_ts.reshape((-1, 1))
             critic_loss = self.critic_loss_func(v_ts, ret_ts)
             self.critic_optim.zero_grad()
@@ -194,6 +196,7 @@ class Ppo:
             self.critic_optim.step()
 
             new_probs_ts, _ = self.actor_net((s1_ts1, s1_ts2), (actor_hs, actor_cs))
+            new_probs_ts = new_probs_ts[:, -PREDICTION_NUM:, :]
             new_probs_ts = new_probs_ts.reshape((-1, op_ts.shape[1]))
             np_ts = torch.softmax(new_probs_ts, dim=1)
 
@@ -221,8 +224,8 @@ class Ppo:
             if (batch_id + 1) % 4 == 0:
                 print(
                     f"critic loss: {sum(critic_loss_lst)/len(critic_loss_lst):.8f}",
-                    f"\t\tactor loss: {sum(actor_loss_lst)/len(actor_loss_lst):.8f}",
-                    f"\t\tentropy loss: {sum(entropy_loss_lst)/len(entropy_loss_lst):.8f}",
+                    f"\tactor loss: {sum(actor_loss_lst)/len(actor_loss_lst):.8f}",
+                    f"\tentropy loss: {sum(entropy_loss_lst)/len(entropy_loss_lst):.8f}",
                 )
                 actor_loss_lst.clear()
                 critic_loss_lst.clear()

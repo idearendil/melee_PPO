@@ -6,7 +6,7 @@ from collections import deque
 import random
 import numpy as np
 import torch
-from parameters import EPISODE_LEN
+from parameters import EPISODE_LEN, PREDICTION_NUM
 
 
 class ReplayBuffer:
@@ -65,10 +65,11 @@ class ReplayBuffer:
                 s1_lst2_t.append(self.buffer[idx][1])
                 s2_lst1_t.append(self.buffer[idx][2])
                 s2_lst2_t.append(self.buffer[idx][3])
-                a_lst_t.append(self.buffer[idx][4])
-                op_lst_t.append(self.buffer[idx][5])
-                adv_lst_t.append(self.buffer[idx][6])
-                ret_lst_t.append(self.buffer[idx][7])
+                if idx >= end_id - PREDICTION_NUM:
+                    a_lst_t.append(self.buffer[idx][4])
+                    op_lst_t.append(self.buffer[idx][5])
+                    adv_lst_t.append(self.buffer[idx][6])
+                    ret_lst_t.append(self.buffer[idx][7])
             s1_lst1.append(np.stack(s1_lst1_t, axis=0))
             s1_lst2.append(np.stack(s1_lst2_t, axis=0))
             s2_lst1.append(np.stack(s2_lst1_t, axis=0))
@@ -81,10 +82,10 @@ class ReplayBuffer:
             actor_cs_lst.append(self.buffer[start_id][9])
             critic_hs_lst.append(self.buffer[start_id][10])
             critic_cs_lst.append(self.buffer[start_id][11])
-        s1_ts1 = torch.Tensor(np.concatenate(s1_lst1, axis=0))
-        s1_ts2 = torch.Tensor(np.concatenate(s1_lst2, axis=0))
-        s2_ts1 = torch.Tensor(np.concatenate(s2_lst1, axis=0))
-        s2_ts2 = torch.Tensor(np.concatenate(s2_lst2, axis=0))
+        s1_ts1 = torch.Tensor(np.stack(s1_lst1, axis=0))
+        s1_ts2 = torch.Tensor(np.stack(s1_lst2, axis=0))
+        s2_ts1 = torch.Tensor(np.stack(s2_lst1, axis=0))
+        s2_ts2 = torch.Tensor(np.stack(s2_lst2, axis=0))
         a_ts = torch.LongTensor(np.concatenate(a_lst, axis=0)).unsqueeze(1)
         op_ts = torch.cat(op_lst, dim=0)
         adv_ts = torch.Tensor(np.concatenate(adv_lst, axis=0)).unsqueeze(1)

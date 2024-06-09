@@ -43,8 +43,8 @@ class ObservationNormalizer:
         """
         Save current ObservationNormalizer state.
         """
-        single_np = np.zeros((1,))
-        single_np[0] = self.n
+        single_np = np.zeros((1,), dtype=np.float32)
+        single_np[0] = (float)(self.n)
         total_np = np.concatenate((self.mean, self.std, self.stdd, single_np), axis=0)
         np.save(path, total_np)
 
@@ -53,6 +53,7 @@ class ObservationNormalizer:
         Load previous ObservationNormalizer state.
         """
         total_np = np.load(path)
+        total_np = np.array(total_np, dtype=np.float32)
         self.mean = total_np[: self.dim]
         self.std = total_np[self.dim : self.dim * 2]
         self.stdd = total_np[self.dim * 2 : self.dim * 3]
