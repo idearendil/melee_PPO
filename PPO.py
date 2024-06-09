@@ -57,8 +57,8 @@ class Ppo:
         and then return action probability by actor_net
         """
         s_ts1, s_ts2 = self.state_preprocessor(s, agent_id, True)
-        s_ts1 = torch.from_numpy(s_ts1).unsqueeze(0).unsqueeze(0).to(self.device)
-        s_ts2 = torch.from_numpy(s_ts2).unsqueeze(0).unsqueeze(0).to(self.device)
+        s_ts1 = torch.from_numpy(s_ts1).unsqueeze(0).to(self.device)
+        s_ts2 = torch.from_numpy(s_ts2).unsqueeze(0).to(self.device)
         return self.actor_net.choose_action((s_ts1, s_ts2), hs_cs, device)
 
     def push_an_episode(self, data, agent_id):
@@ -124,11 +124,11 @@ class Ppo:
                 critic_hs_lst.append(critic_hs_cs[0].cpu().clone().detach())
                 critic_cs_lst.append(critic_hs_cs[1].cpu().clone().detach())
                 prob, actor_hs_cs = self.actor_net(
-                    (s1_ts1[idx].unsqueeze(0).unsqueeze(0), s1_ts2[idx]),
+                    (s1_ts1[idx].unsqueeze(0), s1_ts2[idx]),
                     actor_hs_cs,
                 )
                 v, critic_hs_cs = self.critic_net(
-                    (s2_ts1[idx].unsqueeze(0).unsqueeze(0), s2_ts2[idx]),
+                    (s2_ts1[idx].unsqueeze(0), s2_ts2[idx]),
                     critic_hs_cs,
                 )
                 prob = torch.softmax(prob.squeeze().cpu(), dim=0)
