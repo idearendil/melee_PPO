@@ -65,7 +65,7 @@ def run():
     players[1].ppo.critic_net = torch.load(args.model_path + "critic_net_last.pt")
 
     for episode_id in range(1601, args.episode_num):
-        players[0].ppo.buffer.buffer.clear()
+        players[0].ppo.buffer.clear()
 
         score = 0
         fucked_up_cnt = 0

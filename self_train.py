@@ -237,7 +237,7 @@ def run():
 
     for cycle_id in range(CYCLE_NUM):
         scores = []  # for log
-        players[0].ppo.buffer.buffer.clear()  # PPO is an on-policy algorithm
+        players[0].ppo.buffer.clear()  # PPO is an on-policy algorithm
         while players[0].ppo.buffer.size() < MIN_TUPLES_IN_CYCLE:
             episode_id += 1
             score = 0
