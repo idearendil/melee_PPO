@@ -23,6 +23,7 @@ from parameters import (
 )
 from replay_buffer import ReplayBuffer
 from math import log
+from observation_normalizer import ObservationNormalizer
 
 
 class Ppo:
@@ -41,6 +42,7 @@ class Ppo:
         self.critic_loss_func = torch.nn.MSELoss()
         self.buffer = ReplayBuffer(BUFFER_SIZE)
         self.s_dim = s_dim
+        self.observation_normalizer = ObservationNormalizer(self.s_dim)
 
     def models_to_device(self, device):
         """
@@ -54,7 +56,7 @@ class Ppo:
         Convert state to preprocessed tensor,
         and then return action probability by actor_net
         """
-        s_ts1, s_ts2 = self.state_preprocessor(s, agent_id)
+        s_ts1, s_ts2 = self.state_preprocessor(s, agent_id, True)
         s_ts1 = torch.from_numpy(s_ts1).unsqueeze(0).unsqueeze(0).to(self.device)
         s_ts2 = torch.from_numpy(s_ts2).unsqueeze(0).unsqueeze(0).to(self.device)
         return self.actor_net.choose_action((s_ts1, s_ts2), hs_cs, device)
@@ -90,11 +92,11 @@ class Ppo:
 
         s1_lst1, s1_lst2, s2_lst1, s2_lst2 = [], [], [], []
         for s1 in s1_lst:
-            s1_1, s1_2 = self.state_preprocessor(s1, agent_id)
+            s1_1, s1_2 = self.state_preprocessor(s1, agent_id, True)
             s1_lst1.append(s1_1)
             s1_lst2.append(s1_2)
         for s2 in s2_lst:
-            s2_1, s2_2 = self.state_preprocessor(s2, agent_id)
+            s2_1, s2_2 = self.state_preprocessor(s2, agent_id, True)
             s2_lst1.append(s2_1)
             s2_lst2.append(s2_2)
 
@@ -198,10 +200,10 @@ class Ppo:
                     [],
                 )
                 for s1, s2 in zip(ep_s1_lst, ep_s2_lst):
-                    s1_1, s1_2 = self.state_preprocessor(s1, agent_id)
+                    s1_1, s1_2 = self.state_preprocessor(s1, agent_id, False)
                     ep_s1_lst1.append(s1_1)
                     ep_s1_lst2.append(s1_2)
-                    s2_1, s2_2 = self.state_preprocessor(s2, agent_id)
+                    s2_1, s2_2 = self.state_preprocessor(s2, agent_id, False)
                     ep_s2_lst1.append(s2_1)
                     ep_s2_lst2.append(s2_2)
                 s1_lst1.append(np.stack(ep_s1_lst1, axis=0))
@@ -263,7 +265,7 @@ class Ppo:
             actor_loss_lst.append(actor_loss.item())
             critic_loss_lst.append(critic_loss.item())
             entropy_loss_lst.append(entropy_loss.item())
-            if (batch_id + 1) % 5 == 0:
+            if (batch_id + 1) % 3 == 0:
                 print(
                     f"critic loss: {sum(critic_loss_lst)/len(critic_loss_lst):.8f}",
                     f"\t\tactor loss: {sum(actor_loss_lst)/len(actor_loss_lst):.8f}",
@@ -321,7 +323,7 @@ class Ppo:
             advants[start_t] = approx_q_value - values[start_t]
         return returns, advants
 
-    def state_preprocessor(self, s, agent_id):
+    def state_preprocessor(self, s, agent_id, test=False):
 
         gamestate, previous_states = s
 
@@ -384,5 +386,6 @@ class Ppo:
                 state1[self.s_dim * state_id + 37 + 386 + p2.action.value] = 1.0
 
         state2 = np.zeros((1,), dtype=np.float32)  # not using this one yet
+        state1 = self.observation_normalizer(state1, test)
 
         return (state1, state2)

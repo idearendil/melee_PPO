@@ -124,6 +124,9 @@ def pick_opponent(league_win_rate, device):
         args.model_path + "critic_net_" + str(opp_id - 3) + ".pt"
     ).to(device)
     opp.ppo.actor_net.eval()
+    opp.ppo.observation_normalizer.load(
+        args.model_path + "obs_norm_" + str(opp_id - 3) + ".npy"
+    )
 
     return opp_id, opp
 
@@ -160,6 +163,7 @@ def read_files(player, device):
     player.ppo.critic_net = torch.load(args.model_path + "critic_net_last.pt").to(
         device
     )
+    player.ppo.observation_normalizer.load(args.model_path + "obs_norm_last.npy")
 
     return league_win_rate
 
@@ -180,6 +184,7 @@ def save_files(player, league_win_rate):
         player.ppo.critic_net,
         args.model_path + "critic_net_last.pt",
     )
+    player.ppo.observation_normalizer.save(args.model_path + "obs_norm_last")
 
 
 def agent_release(player, new_agent_id):
@@ -193,6 +198,9 @@ def agent_release(player, new_agent_id):
     torch.save(
         player.ppo.critic_net,
         args.model_path + "critic_net_" + str(new_agent_id) + ".pt",
+    )
+    player.ppo.observation_normalizer.save(
+        args.model_path + "obs_norm_" + str(new_agent_id)
     )
 
 
