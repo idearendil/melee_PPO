@@ -57,10 +57,10 @@ class Ppo:
         Convert state to preprocessed tensor,
         and then return action probability by actor_net
         """
-        s_ts1, s_ts2 = self.state_preprocessor(s, agent_id, True)
-        s_ts1 = torch.from_numpy(s_ts1).unsqueeze(0).unsqueeze(0).to(self.device)
-        s_ts2 = torch.from_numpy(s_ts2).unsqueeze(0).unsqueeze(0).to(self.device)
-        return self.actor_net.choose_action((s_ts1, s_ts2), hs_cs, device)
+        s_np = self.state_preprocessor(s, agent_id)
+        s_np = self.observation_normalizer(s_np)
+        s_ts = torch.from_numpy(s_np).unsqueeze(0).unsqueeze(0).to(self.device)
+        return self.actor_net.choose_action(s_ts, hs_cs, device)
 
     def push_an_episode(self, data, agent_id):
         """
@@ -85,20 +85,16 @@ class Ppo:
         if len(s1_lst) != len(s2_lst):
             print("Error occured!!! len(s1_lst) != len(s2_lst)")
 
-        s1_lst1, s1_lst2, s2_lst1, s2_lst2 = [], [], [], []
+        s1_np_lst, s2_np_lst = [], []
         for s1 in s1_lst:
-            s1_1, s1_2 = self.state_preprocessor(s1, agent_id, False)
-            s1_lst1.append(s1_1)
-            s1_lst2.append(s1_2)
+            s1 = self.state_preprocessor(s1, agent_id)
+            s1_np_lst.append(s1)
         for s2 in s2_lst:
-            s2_1, s2_2 = self.state_preprocessor(s2, agent_id, False)
-            s2_lst1.append(s2_1)
-            s2_lst2.append(s2_2)
+            s2 = self.state_preprocessor(s2, agent_id)
+            s2_np_lst.append(s2)
 
-        s1_ts1 = torch.Tensor(np.array(s1_lst1, dtype=np.float32)).to(self.device)
-        s1_ts2 = torch.Tensor(np.array(s1_lst2, dtype=np.float32)).to(self.device)
-        s2_ts1 = torch.Tensor(np.array(s2_lst1, dtype=np.float32)).to(self.device)
-        s2_ts2 = torch.Tensor(np.array(s2_lst2, dtype=np.float32)).to(self.device)
+        s1_ts = torch.Tensor(np.array(s1_np_lst, dtype=np.float32)).to(self.device)
+        s2_ts = torch.Tensor(np.array(s2_np_lst, dtype=np.float32)).to(self.device)
         r_ts = torch.Tensor(np.array(r_lst, dtype=np.float32))
         masks = torch.Tensor(np.array(mask_lst, dtype=np.float32))
 
@@ -119,17 +115,17 @@ class Ppo:
                 torch.zeros((2, 1, 256), dtype=torch.float32).to(self.device),
                 torch.zeros((2, 1, 256), dtype=torch.float32).to(self.device),
             )
-            for idx, _ in enumerate(s1_lst1):
+            for idx, _ in enumerate(s1_lst):
                 actor_hs_lst.append(actor_hs_cs[0].cpu().clone().detach())
                 actor_cs_lst.append(actor_hs_cs[1].cpu().clone().detach())
                 critic_hs_lst.append(critic_hs_cs[0].cpu().clone().detach())
                 critic_cs_lst.append(critic_hs_cs[1].cpu().clone().detach())
                 prob, actor_hs_cs = self.actor_net(
-                    (s1_ts1[idx].unsqueeze(0).unsqueeze(0), s1_ts2[idx]),
+                    s1_ts[idx].unsqueeze(0).unsqueeze(0),
                     actor_hs_cs,
                 )
                 v, critic_hs_cs = self.critic_net(
-                    (s2_ts1[idx].unsqueeze(0).unsqueeze(0), s2_ts2[idx]),
+                    s2_ts[idx].unsqueeze(0).unsqueeze(0),
                     critic_hs_cs,
                 )
                 prob = torch.softmax(prob.squeeze().cpu(), dim=0)
@@ -139,13 +135,11 @@ class Ppo:
             v_ts = torch.FloatTensor(v_lst)
             ret_ts, adv_ts = self.td_error(r_ts, masks, v_ts)
 
-        for idx, _ in enumerate(s1_lst1):
+        for idx, _ in enumerate(s1_lst):
             self.buffer.push(
                 (
-                    s1_lst1[idx],
-                    s1_lst2[idx],
-                    s2_lst1[idx],
-                    s2_lst2[idx],
+                    s1_np_lst[idx],
+                    s2_np_lst[idx],
                     a_lst[idx],
                     prob_lst[idx],
                     adv_ts[idx].item(),
@@ -154,7 +148,7 @@ class Ppo:
                     actor_cs_lst[idx],
                     critic_hs_lst[idx],
                     critic_cs_lst[idx],
-                    len(s1_lst1) > idx + EPISODE_LEN,
+                    len(s1_lst) > idx + EPISODE_LEN,
                 )
             )
 
@@ -173,10 +167,8 @@ class Ppo:
         critic_loss_lst, actor_loss_lst, entropy_loss_lst = [], [], []
         for batch_id in range(BATCH_NUM):
             (
-                s1_ts1,
-                s1_ts2,
-                s2_ts1,
-                s2_ts2,
+                s1_ts,
+                s2_ts,
                 a_ts,
                 op_ts,
                 adv_ts,
@@ -185,17 +177,18 @@ class Ppo:
                 actor_cs,
                 critic_hs,
                 critic_cs,
-            ) = self.buffer.pull(BATCH_SIZE, self.device)
+            ) = self.buffer.pull(BATCH_SIZE, self.observation_normalizer, self.device)
 
-            v_ts, _ = self.critic_net((s2_ts1, s2_ts2), (critic_hs, critic_cs))
+            v_ts, _ = self.critic_net(s2_ts, (critic_hs, critic_cs))
             v_ts = v_ts[:, -PREDICTION_NUM:, :]
             v_ts = v_ts.reshape((-1, 1))
             critic_loss = self.critic_loss_func(v_ts, ret_ts)
-            self.critic_optim.zero_grad()
-            critic_loss.backward()
-            self.critic_optim.step()
+            if episode_id > 200:
+                self.critic_optim.zero_grad()
+                critic_loss.backward()
+                self.critic_optim.step()
 
-            new_probs_ts, _ = self.actor_net((s1_ts1, s1_ts2), (actor_hs, actor_cs))
+            new_probs_ts, _ = self.actor_net(s1_ts, (actor_hs, actor_cs))
             new_probs_ts = new_probs_ts[:, -PREDICTION_NUM:, :]
             new_probs_ts = new_probs_ts.reshape((-1, op_ts.shape[1]))
             np_ts = torch.softmax(new_probs_ts, dim=1)
@@ -213,7 +206,7 @@ class Ppo:
             actor_loss = -torch.min(surrogate_loss, clipped_loss).mean()
             actor_loss -= ENTROPY_WEIGHT * entropy_loss
 
-            if episode_id > 0:
+            if episode_id > 400:
                 self.actor_optim.zero_grad()
                 actor_loss.backward()
                 self.actor_optim.step()
@@ -221,11 +214,11 @@ class Ppo:
             actor_loss_lst.append(actor_loss.item())
             critic_loss_lst.append(critic_loss.item())
             entropy_loss_lst.append(entropy_loss.item())
-            if (batch_id + 1) % 4 == 0:
+            if (batch_id + 1) % 10 == 0:
                 print(
-                    f"critic loss: {sum(critic_loss_lst)/len(critic_loss_lst):.8f}",
-                    f"\tactor loss: {sum(actor_loss_lst)/len(actor_loss_lst):.8f}",
-                    f"\tentropy loss: {sum(entropy_loss_lst)/len(entropy_loss_lst):.8f}",
+                    f"critic loss: {sum(critic_loss_lst)/len(critic_loss_lst):.7f}",
+                    f"\tactor loss: {sum(actor_loss_lst)/len(actor_loss_lst):.7f}",
+                    f"\tentropy loss: {sum(entropy_loss_lst)/len(entropy_loss_lst):.7f}",
                 )
                 actor_loss_lst.clear()
                 critic_loss_lst.clear()
@@ -274,12 +267,13 @@ class Ppo:
                     break
                 approx_q_value += rewards[t] * (GAMMA**gamma_exponent)
                 gamma_exponent += 1
-            approx_q_value += values[end_t] * (GAMMA**gamma_exponent)
+                if t == end_t - 1:
+                    approx_q_value += values[end_t] * (GAMMA**gamma_exponent)
             returns[start_t] = approx_q_value
             advants[start_t] = approx_q_value - values[start_t]
         return returns, advants
 
-    def state_preprocessor(self, s, agent_id, test=False):
+    def state_preprocessor(self, s, agent_id):
 
         gamestate, previous_states = s
 
@@ -302,7 +296,10 @@ class Ppo:
             state1[self.s_dim * state_id + 6] = 1.0 if p1.facing else -1.0
             state1[self.s_dim * state_id + 7] = 1.0 if p2.facing else -1.0
             state1[self.s_dim * state_id + 8] = (
-                1.0 if (p1.position.x - p2.position.x) * state1[6] < 0 else -1.0
+                1.0
+                if (p1.position.x - p2.position.x) * state1[self.s_dim * state_id + 6]
+                < 0
+                else -1.0
             )
             state1[self.s_dim * state_id + 9] = log(
                 abs(p1.position.x - p2.position.x) + 1
@@ -336,12 +333,11 @@ class Ppo:
             state1[self.s_dim * state_id + 34] = p2.speed_y_self
             state1[self.s_dim * state_id + 35] = (p1.action_frame - 15) / 15
             state1[self.s_dim * state_id + 36] = (p2.action_frame - 15) / 15
+            state1[self.s_dim * state_id + 37] = p1.stock
+            state1[self.s_dim * state_id + 38] = p2.stock
             if p1.action.value < 386:
-                state1[self.s_dim * state_id + 37 + p1.action.value] = 1.0
+                state1[self.s_dim * state_id + 39 + p1.action.value] = 1.0
             if p2.action.value < 386:
-                state1[self.s_dim * state_id + 37 + 386 + p2.action.value] = 1.0
+                state1[self.s_dim * state_id + 39 + 386 + p2.action.value] = 1.0
 
-        state2 = np.zeros((1,), dtype=np.float32)  # not using this one yet
-        state1 = self.observation_normalizer(state1, test)
-
-        return (state1, state2)
+        return state1

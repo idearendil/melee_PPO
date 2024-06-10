@@ -14,38 +14,35 @@ class ObservationNormalizer:
 
     def __init__(self, s_dim):
         self.dim = s_dim
-        self.mean = np.zeros((self.dim,), dtype=np.float32)
-        self.std = np.zeros((self.dim,), dtype=np.float32)
-        self.stdd = np.zeros((self.dim,), dtype=np.float32)
-        self.n = 0
+        self.s1_mean = np.zeros((s_dim), dtype=np.float32)
+        self.s2_mean = np.zeros((s_dim), dtype=np.float32)
+        self.s1_std = np.zeros((s_dim), dtype=np.float32)
+        self.s2_std = np.zeros((s_dim), dtype=np.float32)
 
-    def __call__(self, x, test=False):
-        if not test:
-            self.n += 1
-            if self.n == 1:
-                self.mean = x.copy()
-            else:
-                old_mean = self.mean.copy()
-                self.mean = old_mean + (x - old_mean) / (float)(self.n)
-                self.stdd = self.stdd + (x - old_mean) * (x - self.mean)
-            if self.n > 1:
-                self.std = np.sqrt(self.stdd / (float)(self.n - 1))
-            else:
-                self.std = self.mean
+    def __call__(self, s_np):
+        return (s_np - self.s1_mean) / self.s1_std
 
-        x = x - self.mean
-        x = x / (self.std + 1e-8)
-        x = np.clip(x, -5, +5)
+    def update(self, s1_np, s2_np):
+        """
+        Update ObservationNormalizer state & Normalize input states.
+        """
+        self.s1_mean = np.mean(s1_np, axis=(0, 1))
+        self.s2_mean = np.mean(s2_np, axis=(0, 1))
+        self.s1_std = np.std(s1_np, axis=(0, 1))
+        self.s2_std = np.std(s2_np, axis=(0, 1))
 
-        return x
+        return (
+            (s1_np - self.s1_mean) / self.s1_std,
+            (s2_np - self.s2_mean) / self.s2_std,
+        )
 
     def save(self, path):
         """
         Save current ObservationNormalizer state.
         """
-        single_np = np.zeros((1,), dtype=np.float32)
-        single_np[0] = (float)(self.n)
-        total_np = np.concatenate((self.mean, self.std, self.stdd, single_np), axis=0)
+        total_np = np.concatenate(
+            (self.s1_mean, self.s2_mean, self.s1_std, self.s2_std), axis=0
+        )
         np.save(path, total_np)
 
     def load(self, path):
@@ -54,19 +51,7 @@ class ObservationNormalizer:
         """
         total_np = np.load(path)
         total_np = np.array(total_np, dtype=np.float32)
-        self.mean = total_np[: self.dim]
-        self.std = total_np[self.dim : self.dim * 2]
-        self.stdd = total_np[self.dim * 2 : self.dim * 3]
-        self.n = total_np[-1]
-
-    def combine(self, other):
-        """
-        Combine other ObservationNormalizer to this.
-        """
-        self.mean = (self.mean * self.n + other.mean * other.n) / (self.n + other.n)
-        self.stdd = (self.stdd * self.n + other.stdd * other.n) / (self.n + other.n)
-        self.n += other.n
-        if self.n > 1:
-            self.std = np.sqrt(self.stdd / (self.n - 1))
-        else:
-            self.std = self.mean
+        self.s1_mean = total_np[: self.dim]
+        self.s2_mean = total_np[self.dim : self.dim * 2]
+        self.s1_std = total_np[self.dim * 2 : self.dim * 3]
+        self.s2_std = total_np[self.dim * 3 :]

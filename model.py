@@ -33,9 +33,8 @@ class Actor(nn.Module):
         Returns:
             logits for each action
         """
-        s1, s2 = s
 
-        s1 = self.activ(self.fc1(s1))
+        s1 = self.activ(self.fc1(s))
         s1, hs_cs = self.core(s1, hs_cs)
         s1 = self.fc2(s1)
         return s1, hs_cs
@@ -83,9 +82,8 @@ class Critic(nn.Module):
         Returns:
             estimated value of current state
         """
-        s1, s2 = s
 
-        s1 = self.activ(self.fc1(s1))
+        s1 = self.activ(self.fc1(s))
         s1, hs_cs = self.core(s1, hs_cs)
         s1 = self.fc2(s1)
         return s1, hs_cs
