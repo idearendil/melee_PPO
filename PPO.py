@@ -158,6 +158,8 @@ class Ppo:
         """
         print("buffer size: ", self.buffer.size())
 
+        self.observation_normalizer.update(self.buffer)
+
         self.actor_net.train()
         self.critic_net.train()
         self.actor_optim = optim.Adam(self.actor_net.parameters(), lr=LR_ACTOR)

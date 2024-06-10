@@ -86,7 +86,7 @@ class ReplayBuffer:
 
         s1_np = np.stack(s1_lst, axis=0)
         s2_np = np.stack(s2_lst, axis=0)
-        s1_np, s2_np = observation_normalizer.update(s1_np, s2_np)
+        s1_np, s2_np = observation_normalizer(s1_np, s2_np)
         s1_ts = torch.Tensor(s1_np)
         s2_ts = torch.Tensor(s2_np)
 
