@@ -34,7 +34,7 @@ class ReplayBuffer:
             self.pickable_lst.append(len(self.buffer))
         self.buffer.append(data[:-1])
 
-    def pull(self, data_size, observation_normalizer, device="cpu"):
+    def pull(self, data_size, device="cpu"):
         """
         Pull data of size data_size from buffer.
 
@@ -84,11 +84,8 @@ class ReplayBuffer:
             critic_hs_lst.append(self.buffer[start_id][8])
             critic_cs_lst.append(self.buffer[start_id][9])
 
-        s1_np = np.stack(s1_lst, axis=0)
-        s2_np = np.stack(s2_lst, axis=0)
-        s1_np, s2_np = observation_normalizer(s1_np, s2_np)
-        s1_ts = torch.Tensor(s1_np)
-        s2_ts = torch.Tensor(s2_np)
+        s1_ts = torch.Tensor(np.stack(s1_lst, axis=0))
+        s2_ts = torch.Tensor(np.stack(s2_lst, axis=0))
 
         a_ts = torch.LongTensor(np.concatenate(a_lst, axis=0)).unsqueeze(1)
         op_ts = torch.cat(op_lst, dim=0)

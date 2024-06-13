@@ -24,7 +24,6 @@ from parameters import (
 )
 from replay_buffer import ReplayBuffer
 from math import log
-from observation_normalizer import ObservationNormalizer
 
 
 class Ppo:
@@ -43,7 +42,6 @@ class Ppo:
         self.critic_loss_func = torch.nn.MSELoss()
         self.buffer = ReplayBuffer(BUFFER_SIZE)
         self.s_dim = s_dim
-        self.observation_normalizer = ObservationNormalizer(self.s_dim)
 
     def models_to_device(self, device):
         """
@@ -58,7 +56,6 @@ class Ppo:
         and then return action probability by actor_net
         """
         s_np = self.state_preprocessor(s, agent_id)
-        s_np = self.observation_normalizer(s_np)
         s_ts = torch.from_numpy(s_np).unsqueeze(0).unsqueeze(0).to(self.device)
         return self.actor_net.choose_action(s_ts, hs_cs, device)
 
@@ -158,8 +155,6 @@ class Ppo:
         """
         print("buffer size: ", self.buffer.size())
 
-        self.observation_normalizer.update(self.buffer)
-
         self.actor_net.train()
         self.critic_net.train()
         self.actor_optim = optim.Adam(self.actor_net.parameters(), lr=LR_ACTOR)
@@ -179,16 +174,18 @@ class Ppo:
                 actor_cs,
                 critic_hs,
                 critic_cs,
-            ) = self.buffer.pull(BATCH_SIZE, self.observation_normalizer, self.device)
+            ) = self.buffer.pull(BATCH_SIZE, self.device)
 
             v_ts, _ = self.critic_net(s2_ts, (critic_hs, critic_cs))
             v_ts = v_ts[:, -PREDICTION_NUM:, :]
             v_ts = v_ts.reshape((-1, 1))
             critic_loss = self.critic_loss_func(v_ts, ret_ts)
-            if episode_id > 200:
+            if episode_id > 0:
                 self.critic_optim.zero_grad()
                 critic_loss.backward()
                 self.critic_optim.step()
+            else:
+                print("not training value network!")
 
             new_probs_ts, _ = self.actor_net(s1_ts, (actor_hs, actor_cs))
             new_probs_ts = new_probs_ts[:, -PREDICTION_NUM:, :]
@@ -208,10 +205,12 @@ class Ppo:
             actor_loss = -torch.min(surrogate_loss, clipped_loss).mean()
             actor_loss -= ENTROPY_WEIGHT * entropy_loss
 
-            if episode_id > 400:
+            if episode_id > 200:
                 self.actor_optim.zero_grad()
                 actor_loss.backward()
                 self.actor_optim.step()
+            else:
+                print("not training actor network!")
 
             actor_loss_lst.append(actor_loss.item())
             critic_loss_lst.append(critic_loss.item())
@@ -323,10 +322,10 @@ class Ppo:
             state1[self.s_dim * state_id + 22] = (p2.percent - 50) / 50
             state1[self.s_dim * state_id + 23] = (p1.shield_strength - 30) / 30
             state1[self.s_dim * state_id + 24] = (p2.shield_strength - 30) / 30
-            state1[self.s_dim * state_id + 25] = p1.speed_air_x_self
-            state1[self.s_dim * state_id + 26] = p2.speed_air_x_self
-            state1[self.s_dim * state_id + 27] = p1.speed_ground_x_self
-            state1[self.s_dim * state_id + 28] = p2.speed_ground_x_self
+            state1[self.s_dim * state_id + 25] = p1.speed_air_x_self / 2
+            state1[self.s_dim * state_id + 26] = p2.speed_air_x_self / 2
+            state1[self.s_dim * state_id + 27] = p1.speed_ground_x_self / 2
+            state1[self.s_dim * state_id + 28] = p2.speed_ground_x_self / 2
             state1[self.s_dim * state_id + 29] = p1.speed_x_attack
             state1[self.s_dim * state_id + 30] = p2.speed_x_attack
             state1[self.s_dim * state_id + 31] = p1.speed_y_attack
@@ -335,8 +334,8 @@ class Ppo:
             state1[self.s_dim * state_id + 34] = p2.speed_y_self
             state1[self.s_dim * state_id + 35] = (p1.action_frame - 15) / 15
             state1[self.s_dim * state_id + 36] = (p2.action_frame - 15) / 15
-            state1[self.s_dim * state_id + 37] = p1.stock
-            state1[self.s_dim * state_id + 38] = p2.stock
+            state1[self.s_dim * state_id + 37] = p1.stock - 2.5
+            state1[self.s_dim * state_id + 38] = p2.stock - 2.5
             if p1.action.value < 386:
                 state1[self.s_dim * state_id + 39 + p1.action.value] = 1.0
             if p2.action.value < 386:

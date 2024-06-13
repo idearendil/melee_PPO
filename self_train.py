@@ -23,8 +23,8 @@ from parameters import (
     DELAY,
     WIN_RATE_DECAY,
 )
+from tqdm import tqdm
 
-# from observation_normalizer import ObservationNormalizer
 from melee_env.myenv import MeleeEnv
 from melee_env.agents.basic import PPOAgent, NOOP, CPU
 
@@ -124,9 +124,6 @@ def pick_opponent(league_win_rate, device):
         args.model_path + "critic_net_" + str(opp_id - 3) + ".pt"
     ).to(device)
     opp.ppo.actor_net.eval()
-    opp.ppo.observation_normalizer.load(
-        args.model_path + "obs_norm_" + str(opp_id - 3) + ".npy"
-    )
 
     return opp_id, opp
 
@@ -163,7 +160,6 @@ def read_files(player, device):
     player.ppo.critic_net = torch.load(args.model_path + "critic_net_last.pt").to(
         device
     )
-    player.ppo.observation_normalizer.load(args.model_path + "obs_norm_last.npy")
 
     return league_win_rate
 
@@ -184,7 +180,6 @@ def save_files(player, league_win_rate):
         player.ppo.critic_net,
         args.model_path + "critic_net_last.pt",
     )
-    player.ppo.observation_normalizer.save(args.model_path + "obs_norm_last")
 
 
 def agent_release(player, new_agent_id):
@@ -198,9 +193,6 @@ def agent_release(player, new_agent_id):
     torch.save(
         player.ppo.critic_net,
         args.model_path + "critic_net_" + str(new_agent_id) + ".pt",
-    )
-    player.ppo.observation_normalizer.save(
-        args.model_path + "obs_norm_" + str(new_agent_id)
     )
 
 
@@ -238,6 +230,7 @@ def run():
     for cycle_id in range(CYCLE_NUM):
         scores = []  # for log
         players[0].ppo.buffer.clear()  # PPO is an on-policy algorithm
+        pbar = tqdm(total=100000)
         while players[0].ppo.buffer.size() < MIN_TUPLES_IN_CYCLE:
             episode_id += 1
             score = 0
@@ -312,12 +305,7 @@ def run():
                 Controller().release(Key.tab)
 
             players[0].ppo.push_an_episode(episode_memory, 1)
-            # print(
-            #     "episode:",
-            #     episode_id,
-            #     "\tbuffer length:",
-            #     players[0].ppo.buffer.size(),
-            # )
+            pbar.update(len(episode_memory))
 
             with open("log_self_train.csv", "a", encoding="utf-8") as outfile:
                 outfile.write(str(episode_id) + "," + str(score) + "\n")
@@ -333,6 +321,8 @@ def run():
         if agent_release_flag:
             league_win_rate.append([0, 0])
             agent_release(players[0], len(league_win_rate) - 4)
+
+        pbar.close()
 
         print("cycle: ", cycle_id, "\tscore: ", np.mean(scores))
         players[0].ppo.train(episode_id=episode_id)
