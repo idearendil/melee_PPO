@@ -134,7 +134,7 @@ class Ppo:
 
         for idx, _ in enumerate(s1_lst):
             self.buffer.push(
-                (
+                [
                     s1_np_lst[idx],
                     s2_np_lst[idx],
                     a_lst[idx],
@@ -146,7 +146,7 @@ class Ppo:
                     critic_hs_lst[idx],
                     critic_cs_lst[idx],
                     len(s1_lst) > idx + EPISODE_LEN,
-                )
+                ]
             )
 
     def train(self, episode_id):
@@ -154,6 +154,8 @@ class Ppo:
         Train Actor network and Critic network with data in buffer.
         """
         print("buffer size: ", self.buffer.size())
+
+        self.normalize_return()
 
         self.actor_net.train()
         self.critic_net.train()
@@ -273,6 +275,15 @@ class Ppo:
             returns[start_t] = approx_q_value
             advants[start_t] = approx_q_value - values[start_t]
         return returns, advants
+
+    def normalize_return(self):
+        return_lst = []
+        for a_data in self.buffer.buffer:
+            return_lst.append(a_data[5])
+        return_np = np.array(return_lst, dtype=np.float32)
+        return_np = (return_np - np.mean(return_np)) / np.std(return_np)
+        for idx, a_return in enumerate(return_np):
+            self.buffer.buffer[idx][5] = a_return
 
     def state_preprocessor(self, s, agent_id):
 
