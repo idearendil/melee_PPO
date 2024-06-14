@@ -155,8 +155,6 @@ class Ppo:
         """
         print("buffer size: ", self.buffer.size())
 
-        self.normalize_return()
-
         self.actor_net.train()
         self.critic_net.train()
         self.actor_optim = optim.Adam(self.actor_net.parameters(), lr=LR_ACTOR)
@@ -186,8 +184,6 @@ class Ppo:
                 self.critic_optim.zero_grad()
                 critic_loss.backward()
                 self.critic_optim.step()
-            else:
-                print("not training value network!")
 
             new_probs_ts, _ = self.actor_net(s1_ts, (actor_hs, actor_cs))
             new_probs_ts = new_probs_ts[:, -PREDICTION_NUM:, :]
@@ -211,17 +207,23 @@ class Ppo:
                 self.actor_optim.zero_grad()
                 actor_loss.backward()
                 self.actor_optim.step()
-            else:
-                print("not training actor network!")
 
             actor_loss_lst.append(actor_loss.item())
             critic_loss_lst.append(critic_loss.item())
             entropy_loss_lst.append(entropy_loss.item())
             if (batch_id + 1) % 10 == 0:
+                critic_loss_avg = sum(critic_loss_lst) / len(critic_loss_lst)
+                actor_loss_avg = sum(actor_loss_lst) / len(actor_loss_lst)
+                entropy_loss_avg = sum(entropy_loss_lst) / len(entropy_loss_lst)
+                if episode_id <= 0:
+                    critic_loss_avg = "not trained yet!"
+                if episode_id <= 200:
+                    actor_loss_avg = "not trained yet!"
+                    entropy_loss_avg = "not trained yet!"
                 print(
-                    f"critic loss: {sum(critic_loss_lst)/len(critic_loss_lst):.7f}",
-                    f"\tactor loss: {sum(actor_loss_lst)/len(actor_loss_lst):.7f}",
-                    f"\tentropy loss: {sum(entropy_loss_lst)/len(entropy_loss_lst):.7f}",
+                    f"critic loss: {critic_loss_avg}",
+                    f"\tactor loss: {actor_loss_avg}",
+                    f"\tentropy loss: {entropy_loss_avg}",
                 )
                 actor_loss_lst.clear()
                 critic_loss_lst.clear()
@@ -275,15 +277,6 @@ class Ppo:
             returns[start_t] = approx_q_value
             advants[start_t] = approx_q_value - values[start_t]
         return returns, advants
-
-    def normalize_return(self):
-        return_lst = []
-        for a_data in self.buffer.buffer:
-            return_lst.append(a_data[5])
-        return_np = np.array(return_lst, dtype=np.float32)
-        return_np = (return_np - np.mean(return_np)) / np.std(return_np)
-        for idx, a_return in enumerate(return_np):
-            self.buffer.buffer[idx][5] = a_return
 
     def state_preprocessor(self, s, agent_id):
 

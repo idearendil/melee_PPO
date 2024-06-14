@@ -10,4 +10,4 @@ sns.set_style("whitegrid")
 
 df = pd.read_csv("log_self_train.csv")
 sns.lineplot(data=df, x="episode_id", y="score")
-plt.show()
+plt.savefig('result.png')
