@@ -190,7 +190,7 @@ class Ppo:
             new_probs_ts = new_probs_ts.reshape((-1, op_ts.shape[1]))
             np_ts = torch.softmax(new_probs_ts, dim=1)
 
-            entropy_loss = Categorical(np_ts).entropy().mean()
+            entropy_loss = Categorical(np_ts + 0.0001).entropy().mean()
             op_ts = op_ts.gather(1, a_ts)
             np_ts = np_ts.gather(1, a_ts)
 
