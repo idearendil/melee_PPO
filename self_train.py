@@ -345,7 +345,7 @@ def run():
         ppo_learner.ppo.buffer.clear()  # PPO is an on-policy algorithm
         list_of_running_env = []
         start_time = time.time() - 2
-        pbar = tqdm(total=100000)
+        pbar = tqdm(total=MIN_TUPLES_IN_CYCLE)
         while ppo_learner.ppo.buffer.size() < MIN_TUPLES_IN_CYCLE or len(list_of_running_env) > 0:
             if len(list_of_running_env) < MAX_PARALLEL_ENV_COUNT and ppo_learner.ppo.buffer.size() < MIN_TUPLES_IN_CYCLE:
                 if time.time() - start_time > 2:

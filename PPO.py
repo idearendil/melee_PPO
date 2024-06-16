@@ -3,7 +3,7 @@ The file of Ppo class.
 """
 
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, RandomSampler
 import numpy as np
 import torch
 from torch.distributions import Categorical
@@ -165,12 +165,14 @@ class Ppo:
         )
         critic_loss_lst, actor_loss_lst, entropy_loss_lst = [], [], []
         dataset = CustomDataset(
-            self.replay_buffer.buffer,
-            self.replay_buffer.pickable_lst,
-            EPISODE_LEN
+            self.buffer.buffer,
+            self.buffer.pickable_lst,
+            EPISODE_LEN,
+            PREDICTION_NUM
         )
-        dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=3)
-        for batch_idx, samples in enumerate(dataloader):
+        sampler = RandomSampler(dataset, replacement=True, num_samples=BATCH_SIZE * BATCH_NUM)
+        dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, sampler=sampler, num_workers=3)
+        for batch_id, samples in enumerate(dataloader):
             (
                 s1_ts,
                 s2_ts,
@@ -184,16 +186,20 @@ class Ppo:
                 critic_cs,
             ) = samples
 
-            print(s1_st.shape)
-            print(s2_ts.shape)
-            print(a_ts.shape)
-            print(op_ts.shape)
-            print(adv_ts.shape)
-            print(ret_ts.shape)
-            print(actor_hs.shape)
-            print(actor_cs.shape)
-            print(critic_hs.shape)
-            print(critic_cs.shape) 
+            s1_ts = s1_ts.to(self.device)
+            s2_ts = s2_ts.to(self.device)
+            a_ts = a_ts.to(self.device)
+            op_ts = op_ts.squeeze().to(self.device)
+            adv_ts = adv_ts.to(self.device)
+            ret_ts = ret_ts.to(self.device)
+            actor_hs = actor_hs.squeeze().transpose(0, 1)
+            actor_hs = actor_hs.contiguous().to(self.device)
+            actor_cs = actor_cs.squeeze().transpose(0, 1)
+            actor_cs = actor_cs.contiguous().to(self.device)
+            critic_hs = critic_hs.squeeze().transpose(0, 1)
+            critic_hs = critic_hs.contiguous().to(self.device)
+            critic_cs = critic_cs.squeeze().transpose(0, 1)
+            critic_cs = critic_cs.contiguous().to(self.device)
 
             v_ts, _ = self.critic_net(s2_ts, (critic_hs, critic_cs))
             v_ts = v_ts[:, -PREDICTION_NUM:, :]
@@ -219,7 +225,8 @@ class Ppo:
             ratio = torch.clamp(ratio, 1.0 - EPSILON, 1.0 + EPSILON)
             clipped_loss = ratio * adv_ts
 
-            actor_loss = -torch.min(surrogate_loss, clipped_loss).mean()
+            actor_loss = -torch.minimum(surrogate_loss, clipped_loss)
+            actor_loss = actor_loss.mean()
             actor_loss -= ENTROPY_WEIGHT * entropy_loss
 
             if episode_id > 200:
