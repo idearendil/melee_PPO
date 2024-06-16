@@ -127,7 +127,7 @@ def pick_opponent(league_win_rate, device):
         return opp_id, CPU(enums.Character.FOX, 1 + opp_id)
 
     opp = PPOAgent(
-        enums.Character.FOX, 2, 1, device, STATE_DIM, ACTION_DIM, test_mode=True
+        enums.Character.FOX, 2, 1, device, STATE_DIM, ACTION_DIM, test_mode=False
     )
     opp.ppo.actor_net = torch.load(
         args.model_path + "actor_net_" + str(opp_id - 3) + ".pt"
@@ -136,6 +136,7 @@ def pick_opponent(league_win_rate, device):
         args.model_path + "critic_net_" + str(opp_id - 3) + ".pt"
     ).to(device)
     opp.ppo.actor_net.eval()
+    opp.ppo.actor_net = torch.compile(opp.ppo.actor_net, mode='reduce-overhead')
 
     return opp_id, opp
 
