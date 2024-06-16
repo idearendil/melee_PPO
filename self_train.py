@@ -47,7 +47,7 @@ parser.add_argument(
 parser.add_argument(
     "--iso",
     type=str,
-    default="../../../ssbm.iso",
+    default="../../ssbm.iso",
     help="Path to your NTSC 1.02/PAL SSBM Melee ISO",
 )
 parser.add_argument(
@@ -210,7 +210,7 @@ def agent_release(player, new_agent_id):
 
 @ray.remote
 def run_episode(episode_id, ppo_agent, stage, league_win_rate, device):
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     is_valid_run = True
 
     try:
@@ -218,6 +218,7 @@ def run_episode(episode_id, ppo_agent, stage, league_win_rate, device):
         
         ppo_agent.device = device
         ppo_agent.ppo.device = device
+        ppo_agent.ppo.actor_net = torch.compile(ppo_agent.ppo.actor_net, mode='reduce-overhead')
         ppo_agent.ppo.actor_net.to(device)
         ppo_agent.ppo.actor_net.eval()
         ppo_agent.hs_cs = (
@@ -311,7 +312,7 @@ def run():
     Start training with given options.
     """
 
-    ray.init(log_to_driver=False)
+    ray.init(num_cpus=10, log_to_driver=False)
 
     device = (
         torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
@@ -340,7 +341,7 @@ def run():
 
     for cycle_id in range(CYCLE_NUM):
         scores = []  # for log
-        MAX_PARALLEL_ENV_COUNT = 8
+        MAX_PARALLEL_ENV_COUNT = 4
         ppo_learner.ppo.buffer.clear()  # PPO is an on-policy algorithm
         list_of_running_env = []
         start_time = time.time() - 2
@@ -348,10 +349,10 @@ def run():
         while ppo_learner.ppo.buffer.size() < MIN_TUPLES_IN_CYCLE or len(list_of_running_env) > 0:
             if len(list_of_running_env) < MAX_PARALLEL_ENV_COUNT and ppo_learner.ppo.buffer.size() < MIN_TUPLES_IN_CYCLE:
                 if time.time() - start_time > 2:
-                    copied_ppo = copy.deepcopy(ppo_actor)
+                    # copied_ppo = copy.deepcopy(ppo_actor)
                     list_of_running_env.append(run_episode.remote(
                         episode_id,
-                        copied_ppo,
+                        ppo_actor,
                         enums.Stage.FINAL_DESTINATION,
                         league_win_rate,
                         device

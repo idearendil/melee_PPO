@@ -52,7 +52,7 @@ class Actor(nn.Module):
             hs = torch.zeros((2, len(s), 256), dtype=torch.float32).to(device)
             cs = torch.zeros((2, len(s), 256), dtype=torch.float32).to(device)
             hs_cs = (hs, cs)
-        with torch.no_grad():
+        with torch.inference_mode():
             self.eval()
             action_prob_ts, hs_cs = self.forward(s, hs_cs)
             action_prob_ts = torch.softmax(action_prob_ts, dim=2)
