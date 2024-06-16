@@ -218,9 +218,9 @@ def run_episode(episode_id, ppo_agent, stage, league_win_rate, device):
         
         ppo_agent.device = device
         ppo_agent.ppo.device = device
-        ppo_agent.ppo.actor_net = torch.compile(ppo_agent.ppo.actor_net, mode='reduce-overhead')
         ppo_agent.ppo.actor_net.to(device)
         ppo_agent.ppo.actor_net.eval()
+        ppo_agent.ppo.actor_net = torch.compile(ppo_agent.ppo.actor_net, mode='reduce-overhead')
         ppo_agent.hs_cs = (
             torch.zeros((2, 1, 256), dtype=torch.float32).to(device),
             torch.zeros((2, 1, 256), dtype=torch.float32).to(device),

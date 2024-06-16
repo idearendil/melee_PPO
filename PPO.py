@@ -3,6 +3,7 @@ The file of Ppo class.
 """
 
 import torch.optim as optim
+from torch.utils.data import DataLoader
 import numpy as np
 import torch
 from torch.distributions import Categorical
@@ -23,6 +24,7 @@ from parameters import (
     PREDICTION_NUM,
 )
 from replay_buffer import ReplayBuffer
+from CustomDataset import CustomDataset
 from math import log
 
 
@@ -162,7 +164,13 @@ class Ppo:
             self.critic_net.parameters(), lr=LR_CRITIC, weight_decay=L2_RATE
         )
         critic_loss_lst, actor_loss_lst, entropy_loss_lst = [], [], []
-        for batch_id in range(BATCH_NUM):
+        dataset = CustomDataset(
+            self.replay_buffer.buffer,
+            self.replay_buffer.pickable_lst,
+            EPISODE_LEN
+        )
+        dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=3)
+        for batch_idx, samples in enumerate(dataloader):
             (
                 s1_ts,
                 s2_ts,
@@ -174,7 +182,18 @@ class Ppo:
                 actor_cs,
                 critic_hs,
                 critic_cs,
-            ) = self.buffer.pull(BATCH_SIZE, self.device)
+            ) = samples
+
+            print(s1_st.shape)
+            print(s2_ts.shape)
+            print(a_ts.shape)
+            print(op_ts.shape)
+            print(adv_ts.shape)
+            print(ret_ts.shape)
+            print(actor_hs.shape)
+            print(actor_cs.shape)
+            print(critic_hs.shape)
+            print(critic_cs.shape) 
 
             v_ts, _ = self.critic_net(s2_ts, (critic_hs, critic_cs))
             v_ts = v_ts[:, -PREDICTION_NUM:, :]
