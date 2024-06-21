@@ -3,7 +3,7 @@ The file of hyperparameters.
 """
 
 LR_ACTOR = 0.0001
-ENTROPY_WEIGHT = 0.0001  # 0.0001
+ENTROPY_WEIGHT = 0.001  # 0.0001
 EPSILON = 0.2
 
 LR_CRITIC = 0.0001

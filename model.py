@@ -23,6 +23,8 @@ class Actor(nn.Module):
         self.a_dim = a_dim
         self.s_dim = s_dim
         self.activ = nn.ELU()
+        self.bn1 = torch.nn.BatchNorm1d(256)
+        self.bn2 = torch.nn.BatchNorm1d(256)
 
     def forward(self, s, hs_cs):
         """
@@ -35,7 +37,9 @@ class Actor(nn.Module):
         """
 
         s1 = self.activ(self.fc1(s))
+        s1 = self.bn1(s1.transpose(1, 2)).transpose(1, 2)
         s1, hs_cs = self.core(s1, hs_cs)
+        s1 = self.bn2(s1.transpose(1, 2)).transpose(1, 2)
         s1 = self.fc2(s1)
         return s1, hs_cs
 
@@ -72,6 +76,8 @@ class Critic(nn.Module):
         self.core = nn.LSTM(256, 256, 2, batch_first=True)
         self.fc2 = nn.Linear(256, 1)
         self.activ = nn.ELU()
+        self.bn1 = torch.nn.BatchNorm1d(256)
+        self.bn2 = torch.nn.BatchNorm1d(256)
 
     def forward(self, s, hs_cs):
         """
@@ -84,6 +90,8 @@ class Critic(nn.Module):
         """
 
         s1 = self.activ(self.fc1(s))
+        s1 = self.bn1(s1.transpose(1, 2)).transpose(1, 2)
         s1, hs_cs = self.core(s1, hs_cs)
+        s1 = self.bn2(s1.transpose(1, 2)).transpose(1, 2)
         s1 = self.fc2(s1)
         return s1, hs_cs
