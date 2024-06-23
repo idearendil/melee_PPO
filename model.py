@@ -26,6 +26,19 @@ class Actor(nn.Module):
         self.bn1 = torch.nn.BatchNorm1d(256)
         self.bn2 = torch.nn.BatchNorm1d(256)
 
+        nn.init.orthogonal_(self.fc1.weight.data, gain=1.41)
+        nn.init.zeros_(self.fc1.bias.data)
+        nn.init.orthogonal_(self.core.weight_ih_l0.data, gain=1.0)
+        nn.init.orthogonal_(self.core.weight_hh_l0.data, gain=1.0)
+        nn.init.zeros_(self.core.bias_ih_l0.data)
+        nn.init.zeros_(self.core.bias_hh_l0.data)
+        nn.init.orthogonal_(self.core.weight_ih_l1.data, gain=1.0)
+        nn.init.orthogonal_(self.core.weight_hh_l1.data, gain=1.0)
+        nn.init.zeros_(self.core.bias_ih_l1.data)
+        nn.init.zeros_(self.core.bias_hh_l1.data)
+        nn.init.orthogonal_(self.fc2.weight.data, gain=0.01)
+        nn.init.zeros_(self.fc2.bias.data)
+
     def forward(self, s, hs_cs):
         """
         Network forward function.

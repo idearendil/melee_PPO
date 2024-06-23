@@ -159,9 +159,9 @@ class Ppo:
 
         self.actor_net.train()
         self.critic_net.train()
-        self.actor_optim = optim.Adam(self.actor_net.parameters(), lr=LR_ACTOR)
+        self.actor_optim = optim.Adam(self.actor_net.parameters(), lr=LR_ACTOR, eps=1e-5)
         self.critic_optim = optim.Adam(
-            self.critic_net.parameters(), lr=LR_CRITIC, weight_decay=L2_RATE
+            self.critic_net.parameters(), lr=LR_CRITIC, weight_decay=L2_RATE, eps=1e-5
         )
         critic_loss_lst, actor_loss_lst, entropy_loss_lst = [], [], []
         dataset = CustomDataset(
@@ -215,7 +215,7 @@ class Ppo:
             new_probs_ts = new_probs_ts.reshape((-1, op_ts.shape[1]))
             np_ts = torch.softmax(new_probs_ts, dim=1)
 
-            entropy_loss = Categorical(np_ts + 0.0001).entropy().mean()
+            entropy_loss = Categorical(np_ts).entropy().mean()
             op_ts = op_ts.gather(1, a_ts)
             np_ts = np_ts.gather(1, a_ts)
 
@@ -306,7 +306,8 @@ class Ppo:
 
     def state_preprocessor(self, s, agent_id):
 
-        gamestate, previous_states = s
+        states, prev_action = s
+        gamestate, previous_states = states
 
         state1 = np.zeros((self.s_dim * (PRE_STATES_NUM + 1),), dtype=np.float32)
 
@@ -314,9 +315,11 @@ class Ppo:
             if state_id == 0:
                 p1 = gamestate.players[agent_id]
                 p2 = gamestate.players[3 - agent_id]
+                proj_len = gamestate.projectiles
             else:
                 p1 = previous_states[state_id - 1].players[agent_id]
                 p2 = previous_states[state_id - 1].players[3 - agent_id]
+                proj_len = previous_states[state_id - 1].projectiles
 
             state1[self.s_dim * state_id + 0] = p1.position.x / 90
             state1[self.s_dim * state_id + 1] = p1.position.y / 90
@@ -370,5 +373,18 @@ class Ppo:
                 state1[self.s_dim * state_id + 39 + p1.action.value] = 1.0
             if p2.action.value < 386:
                 state1[self.s_dim * state_id + 39 + 386 + p2.action.value] = 1.0
+            proj_idx = 0
+            for a_proj in proj_len:
+                if a_proj.owner == agent_id:
+                    continue
+                state1[self.s_dim * state_id + 39 + 386 * 2 + proj_idx * 4] = a_proj.position.x / 90
+                state1[self.s_dim * state_id + 39 + 386 * 2 + proj_idx * 4 + 1] = a_proj.position.y / 90
+                state1[self.s_dim * state_id + 39 + 386 * 2 + proj_idx * 4 + 2] = a_proj.speed.x / 2
+                state1[self.s_dim * state_id + 39 + 386 * 2 + proj_idx * 4 + 3] = a_proj.speed.y / 2
+                proj_idx += 1
+                if proj_idx >= 10:
+                    break
+            state1[self.s_dim * state_id + 39 + 386 * 2 + 40 + prev_action] = 1.0
+                
 
         return state1

@@ -227,6 +227,7 @@ def run_episode(episode_id, ppo_agent, stage, league_win_rate, device):
             torch.zeros((2, 1, 256), dtype=torch.float32).to(device),
         )
         ppo_agent.action_q = []
+        ppo_agent.prev_action = 0
 
         opp_id, foe = pick_opponent(league_win_rate, device)
 
@@ -249,14 +250,14 @@ def run_episode(episode_id, ppo_agent, stage, league_win_rate, device):
                 # pick player1's action
                 action_pair[0], act_data = players[PPO_AGENT].act(now_s)
                 if act_data is not None:
-                    episode_memory.append(([now_s, act_data], [None, 0, 1]))
+                    episode_memory.append(([(now_s, ppo_agent.prev_action), act_data], [None, 0, 1]))
                     if countdown_before_action_applied > 0:
                         print(
                             "error occured!!! Timer is not cleared before the new action decided!"
                         )
                     countdown_before_action_applied = DELAY
                     if countdown_before_action_applied == 0:
-                        episode_memory[-1][1][0] = now_s
+                        episode_memory[-1][1][0] = (now_s, ppo_agent.prev_action)
 
                 # pick player2's action
                 if opp_id < 3:
@@ -274,7 +275,7 @@ def run_episode(episode_id, ppo_agent, stage, league_win_rate, device):
                         episode_memory[-2][1][2] *= mask
                     countdown_before_action_applied -= 1
                     if countdown_before_action_applied == 0:
-                        episode_memory[-1][1][0] = now_s
+                        episode_memory[-1][1][0] = (now_s, ppo_agent.prev_action)
                 else:
                     episode_memory[-1][1][1] += r[0]
                     episode_memory[-1][1][2] *= mask
