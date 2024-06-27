@@ -157,103 +157,181 @@ class Ppo:
         """
         print("buffer size: ", self.buffer.size())
 
-        self.actor_net.train()
-        self.critic_net.train()
-        self.actor_optim = optim.Adam(self.actor_net.parameters(), lr=LR_ACTOR, eps=1e-5)
+        self.actor_optim = optim.Adam(
+            self.actor_net.parameters(), lr=LR_ACTOR, eps=1e-5
+        )
         self.critic_optim = optim.Adam(
             self.critic_net.parameters(), lr=LR_CRITIC, weight_decay=L2_RATE, eps=1e-5
         )
-        critic_loss_lst, actor_loss_lst, entropy_loss_lst = [], [], []
-        dataset = CustomDataset(
+        train_set_len = int(len(self.buffer.pickable_lst) * 0.8)
+        train_set = CustomDataset(
             self.buffer.buffer,
-            self.buffer.pickable_lst,
+            self.buffer.pickable_lst[:train_set_len],
             EPISODE_LEN,
             PREDICTION_NUM
         )
-        sampler = RandomSampler(dataset, replacement=True, num_samples=BATCH_SIZE * BATCH_NUM)
-        dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, sampler=sampler, num_workers=3)
-        for batch_id, samples in enumerate(dataloader):
-            (
-                s1_ts,
-                s2_ts,
-                a_ts,
-                op_ts,
-                adv_ts,
-                ret_ts,
-                actor_hs,
-                actor_cs,
-                critic_hs,
-                critic_cs,
-            ) = samples
+        val_set = CustomDataset(
+            self.buffer.buffer,
+            self.buffer.pickable_lst[train_set_len:],
+            EPISODE_LEN,
+            PREDICTION_NUM
+        )
+        train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, drop_last=True, num_workers=3)
+        val_loader = DataLoader(val_set, batch_size=BATCH_SIZE, shuffle=True, drop_last=True, num_workers=3)
 
-            s1_ts = s1_ts.to(self.device)
-            s2_ts = s2_ts.to(self.device)
-            a_ts = a_ts.to(self.device)
-            op_ts = op_ts.squeeze().to(self.device)
-            adv_ts = adv_ts.to(self.device)
-            ret_ts = ret_ts.to(self.device)
-            actor_hs = actor_hs.squeeze().transpose(0, 1)
-            actor_hs = actor_hs.contiguous().to(self.device)
-            actor_cs = actor_cs.squeeze().transpose(0, 1)
-            actor_cs = actor_cs.contiguous().to(self.device)
-            critic_hs = critic_hs.squeeze().transpose(0, 1)
-            critic_hs = critic_hs.contiguous().to(self.device)
-            critic_cs = critic_cs.squeeze().transpose(0, 1)
-            critic_cs = critic_cs.contiguous().to(self.device)
+        actor_earlystopped, critic_earlystopped = False, False
+        if episode_id < 200:
+            actor_earlystopped = True
+        critic_val_loss_lst = []
 
-            v_ts, _ = self.critic_net(s2_ts, (critic_hs, critic_cs))
-            v_ts = v_ts[:, -PREDICTION_NUM:, :]
-            v_ts = v_ts.reshape((-1, 1))
-            critic_loss = self.critic_loss_func(v_ts, ret_ts)
-            if episode_id > 0:
-                self.critic_optim.zero_grad()
-                critic_loss.backward()
-                self.critic_optim.step()
+        for epoch_id in range(100):
+            self.critic_net.train()
+            self.actor_net.train()
+            for batch_id, samples in enumerate(train_loader):
+                (
+                    s1_ts,
+                    s2_ts,
+                    a_ts,
+                    op_ts,
+                    adv_ts,
+                    ret_ts,
+                    actor_hs,
+                    actor_cs,
+                    critic_hs,
+                    critic_cs,
+                ) = samples
 
-            new_probs_ts, _ = self.actor_net(s1_ts, (actor_hs, actor_cs))
-            new_probs_ts = new_probs_ts[:, -PREDICTION_NUM:, :]
-            new_probs_ts = new_probs_ts.reshape((-1, op_ts.shape[1]))
-            np_ts = torch.softmax(new_probs_ts, dim=1)
+                s1_ts = s1_ts.to(self.device)
+                s2_ts = s2_ts.to(self.device)
+                a_ts = a_ts.to(self.device)
+                op_ts = op_ts.squeeze().to(self.device)
+                adv_ts = adv_ts.to(self.device)
+                ret_ts = ret_ts.to(self.device)
+                actor_hs = actor_hs.squeeze().transpose(0, 1)
+                actor_hs = actor_hs.contiguous().to(self.device)
+                actor_cs = actor_cs.squeeze().transpose(0, 1)
+                actor_cs = actor_cs.contiguous().to(self.device)
+                critic_hs = critic_hs.squeeze().transpose(0, 1)
+                critic_hs = critic_hs.contiguous().to(self.device)
+                critic_cs = critic_cs.squeeze().transpose(0, 1)
+                critic_cs = critic_cs.contiguous().to(self.device)
 
-            entropy_loss = Categorical(np_ts).entropy().mean()
-            op_ts = op_ts.gather(1, a_ts)
-            np_ts = np_ts.gather(1, a_ts)
+                if not critic_earlystopped:
+                    v_ts, _ = self.critic_net(s2_ts, (critic_hs, critic_cs))
+                    v_ts = v_ts[:, -PREDICTION_NUM:, :]
+                    v_ts = v_ts.reshape((-1, 1))
+                    critic_loss = self.critic_loss_func(v_ts, ret_ts)
+                    self.critic_optim.zero_grad()
+                    critic_loss.backward()
+                    self.critic_optim.step()
 
-            ratio = torch.exp(torch.log(np_ts) - torch.log(op_ts))
-            surrogate_loss = ratio * adv_ts
+                if not actor_earlystopped:
+                    new_probs_ts, _ = self.actor_net(s1_ts, (actor_hs, actor_cs))
+                    new_probs_ts = new_probs_ts[:, -PREDICTION_NUM:, :]
+                    new_probs_ts = new_probs_ts.reshape((-1, op_ts.shape[1]))
+                    np_ts = torch.softmax(new_probs_ts, dim=1)
 
-            ratio = torch.clamp(ratio, 1.0 - EPSILON, 1.0 + EPSILON)
-            clipped_loss = ratio * adv_ts
+                    entropy_loss = Categorical(np_ts).entropy().mean()
+                    op_ts = op_ts.gather(1, a_ts)
+                    np_ts = np_ts.gather(1, a_ts)
 
-            actor_loss = -torch.minimum(surrogate_loss, clipped_loss)
-            actor_loss = actor_loss.mean()
-            actor_loss -= ENTROPY_WEIGHT * entropy_loss
+                    ratio = torch.exp(torch.log(np_ts) - torch.log(op_ts))
+                    surrogate_loss = ratio * adv_ts
 
-            if episode_id > 200:
-                self.actor_optim.zero_grad()
-                actor_loss.backward()
-                self.actor_optim.step()
+                    ratio = torch.clamp(ratio, 1.0 - EPSILON, 1.0 + EPSILON)
+                    clipped_loss = ratio * adv_ts
 
-            actor_loss_lst.append(actor_loss.item())
-            critic_loss_lst.append(critic_loss.item())
-            entropy_loss_lst.append(entropy_loss.item())
-            if (batch_id + 1) % 10 == 0:
+                    actor_loss = -torch.minimum(surrogate_loss, clipped_loss)
+                    actor_loss = actor_loss.mean()
+                    actor_loss -= ENTROPY_WEIGHT * entropy_loss
+
+                    self.actor_optim.zero_grad()
+                    actor_loss.backward()
+                    self.actor_optim.step()
+            
+            critic_loss_lst, actor_loss_lst, entropy_loss_lst = [], [], []
+            self.critic_net.eval()
+            self.actor_net.eval()
+            for batch_id, samples in enumerate(val_loader):
+                (
+                    s1_ts,
+                    s2_ts,
+                    a_ts,
+                    op_ts,
+                    adv_ts,
+                    ret_ts,
+                    actor_hs,
+                    actor_cs,
+                    critic_hs,
+                    critic_cs,
+                ) = samples
+
+                s1_ts = s1_ts.to(self.device)
+                s2_ts = s2_ts.to(self.device)
+                a_ts = a_ts.to(self.device)
+                op_ts = op_ts.squeeze().to(self.device)
+                adv_ts = adv_ts.to(self.device)
+                ret_ts = ret_ts.to(self.device)
+                actor_hs = actor_hs.squeeze().transpose(0, 1)
+                actor_hs = actor_hs.contiguous().to(self.device)
+                actor_cs = actor_cs.squeeze().transpose(0, 1)
+                actor_cs = actor_cs.contiguous().to(self.device)
+                critic_hs = critic_hs.squeeze().transpose(0, 1)
+                critic_hs = critic_hs.contiguous().to(self.device)
+                critic_cs = critic_cs.squeeze().transpose(0, 1)
+                critic_cs = critic_cs.contiguous().to(self.device)
+
+                if not critic_earlystopped:
+                    v_ts, _ = self.critic_net(s2_ts, (critic_hs, critic_cs))
+                    v_ts = v_ts[:, -PREDICTION_NUM:, :]
+                    v_ts = v_ts.reshape((-1, 1))
+                    critic_loss = self.critic_loss_func(v_ts, ret_ts)
+                    critic_loss_lst.append(critic_loss.item())
+
+                if not actor_earlystopped:
+                    new_probs_ts, _ = self.actor_net(s1_ts, (actor_hs, actor_cs))
+                    new_probs_ts = new_probs_ts[:, -PREDICTION_NUM:, :]
+                    new_probs_ts = new_probs_ts.reshape((-1, op_ts.shape[1]))
+                    np_ts = torch.softmax(new_probs_ts, dim=1)
+
+                    entropy_loss = Categorical(np_ts).entropy().mean()
+                    op_ts = op_ts.gather(1, a_ts)
+                    np_ts = np_ts.gather(1, a_ts)
+
+                    ratio = torch.exp(torch.log(np_ts) - torch.log(op_ts))
+                    surrogate_loss = ratio * adv_ts
+
+                    ratio = torch.clamp(ratio, 1.0 - EPSILON, 1.0 + EPSILON)
+                    clipped_loss = ratio * adv_ts
+
+                    actor_loss = -torch.minimum(surrogate_loss, clipped_loss)
+                    actor_loss = actor_loss.mean()
+                    actor_loss -= ENTROPY_WEIGHT * entropy_loss
+                    actor_loss_lst.append(actor_loss.item())
+                    entropy_loss_lst.append(entropy_loss.item())
+
+            if not critic_earlystopped:
                 critic_loss_avg = sum(critic_loss_lst) / len(critic_loss_lst)
+                critic_val_loss_lst.append(critic_loss_avg)
+                if len(critic_val_loss_lst) > 1 and critic_val_loss_lst[-2] < critic_val_loss_lst[-1]:
+                    critic_earlystopped = True
+            else:
+                critic_loss_avg = 0
+            if not actor_earlystopped:
                 actor_loss_avg = sum(actor_loss_lst) / len(actor_loss_lst)
                 entropy_loss_avg = sum(entropy_loss_lst) / len(entropy_loss_lst)
-                if episode_id <= 0:
-                    critic_loss_avg = "not trained yet!"
-                if episode_id <= 200:
-                    actor_loss_avg = "not trained yet!"
-                    entropy_loss_avg = "not trained yet!"
-                print(
-                    f"critic loss: {critic_loss_avg}",
-                    f"\tactor loss: {actor_loss_avg}",
-                    f"\tentropy loss: {entropy_loss_avg}",
-                )
-                actor_loss_lst.clear()
-                critic_loss_lst.clear()
-                entropy_loss_lst.clear()
+                if epoch_id >= 1:
+                    actor_earlystopped = True
+            else:
+                actor_loss_avg = 0
+                entropy_loss_avg = 0
+            print(
+                f"critic loss: {critic_loss_avg:.8f}",
+                f"\tactor loss: {actor_loss_avg:.8f}",
+                f"\tentropy loss: {entropy_loss_avg:.8f}",
+            )
+            if critic_earlystopped and actor_earlystopped:
+                break
 
     def get_gae(self, rewards, masks, values):
         """
